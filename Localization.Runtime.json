@@ -1,5 +1,8 @@
 {
   "ja": {
+    "module.bilibilisearch.msg.recordUnavailable": "この結果は直接操作できません。ワールド作者に検索モジュールの更新を依頼してください。",
+    "module.bilibilisearch.msg.staleResults": "検索結果が更新されました。再検索してください。",
+    "module.bilibilisearch.msg.cooldown": "少し待ってからもう一度お試しください。",
     "module.bilibilisearch.version.back": "戻る",
     "module.bilibilisearch.title": "動画検索",
     "module.bilibilisearch.placeholder": "キーワードを追記（例 音楽）",
@@ -41,6 +44,9 @@
     "button.nextPage": "次のページ"
   },
   "en": {
+    "module.bilibilisearch.msg.recordUnavailable": "Direct action is unavailable for this result. Ask the world author to update the search module.",
+    "module.bilibilisearch.msg.staleResults": "Results changed. Please search again.",
+    "module.bilibilisearch.msg.cooldown": "Please wait a moment before trying again.",
     "module.bilibilisearch.version.back": "Back",
     "module.bilibilisearch.title": "Video Search",
     "module.bilibilisearch.placeholder": "append a keyword, e.g. music",
@@ -82,6 +88,9 @@
     "button.nextPage": "Next"
   },
   "ko": {
+    "module.bilibilisearch.msg.recordUnavailable": "이 결과는 바로 실행할 수 없습니다. 월드 제작자에게 검색 모듈 업데이트를 요청하세요.",
+    "module.bilibilisearch.msg.staleResults": "검색 결과가 변경되었습니다. 다시 검색하세요.",
+    "module.bilibilisearch.msg.cooldown": "잠시 후 다시 시도하세요.",
     "module.bilibilisearch.version.back": "뒤로",
     "module.bilibilisearch.title": "동영상 검색",
     "module.bilibilisearch.placeholder": "키워드를 덧붙이세요 (예: 음악)",
@@ -123,6 +132,9 @@
     "button.nextPage": "다음 페이지"
   },
   "zh-CN": {
+    "module.bilibilisearch.msg.recordUnavailable": "此结果暂不支持直接操作，请联系地图作者更新搜索模块。",
+    "module.bilibilisearch.msg.staleResults": "搜索结果已更新，请重新搜索。",
+    "module.bilibilisearch.msg.cooldown": "操作过于频繁，请稍后再试。",
     "module.bilibilisearch.version.back": "返回",
     "module.bilibilisearch.title": "哔哩哔哩搜索",
     "module.bilibilisearch.placeholder": "补全关键词，例如 音乐",
@@ -164,6 +176,9 @@
     "button.nextPage": "下一页"
   },
   "zh-HK": {
+    "module.bilibilisearch.msg.recordUnavailable": "此結果暫不支援直接操作，請聯絡地圖作者更新搜尋模組。",
+    "module.bilibilisearch.msg.staleResults": "搜尋結果已更新，請重新搜尋。",
+    "module.bilibilisearch.msg.cooldown": "操作過於頻繁，請稍後再試。",
     "module.bilibilisearch.version.back": "返回",
     "module.bilibilisearch.title": "嗶哩嗶哩搜尋",
     "module.bilibilisearch.placeholder": "補全關鍵字，例如 音樂",
@@ -205,6 +220,9 @@
     "button.nextPage": "下一頁"
   },
   "ru": {
+    "module.bilibilisearch.msg.recordUnavailable": "Прямое действие недоступно. Попросите автора мира обновить модуль поиска.",
+    "module.bilibilisearch.msg.staleResults": "Результаты изменились. Повторите поиск.",
+    "module.bilibilisearch.msg.cooldown": "Подождите немного и повторите попытку.",
     "module.bilibilisearch.version.back": "Назад",
     "module.bilibilisearch.title": "Поиск видео",
     "module.bilibilisearch.placeholder": "добавьте ключевое слово, напр. музыка",
@@ -246,6 +264,9 @@
     "button.nextPage": "Следующая"
   },
   "uk": {
+    "module.bilibilisearch.msg.recordUnavailable": "Пряма дія недоступна. Попросіть автора світу оновити модуль пошуку.",
+    "module.bilibilisearch.msg.staleResults": "Результати змінилися. Повторіть пошук.",
+    "module.bilibilisearch.msg.cooldown": "Зачекайте трохи та спробуйте знову.",
     "module.bilibilisearch.version.back": "Назад",
     "module.bilibilisearch.title": "Пошук відео",
     "module.bilibilisearch.placeholder": "додайте ключове слово, напр. музика",
@@ -287,6 +308,9 @@
     "button.nextPage": "Наступна"
   },
   "es": {
+    "module.bilibilisearch.msg.recordUnavailable": "La acción directa no está disponible. Pide al autor del mundo que actualice el módulo de búsqueda.",
+    "module.bilibilisearch.msg.staleResults": "Los resultados han cambiado. Busca de nuevo.",
+    "module.bilibilisearch.msg.cooldown": "Espera un momento y vuelve a intentarlo.",
     "module.bilibilisearch.version.back": "Volver",
     "module.bilibilisearch.title": "Búsqueda de vídeos",
     "module.bilibilisearch.placeholder": "añade una palabra clave, p. ej. música",
@@ -328,6 +352,9 @@
     "button.nextPage": "Siguiente"
   },
   "it": {
+    "module.bilibilisearch.msg.recordUnavailable": "Azione diretta non disponibile. Chiedi all’autore del mondo di aggiornare il modulo di ricerca.",
+    "module.bilibilisearch.msg.staleResults": "I risultati sono cambiati. Ripeti la ricerca.",
+    "module.bilibilisearch.msg.cooldown": "Attendi un momento e riprova.",
     "module.bilibilisearch.version.back": "Indietro",
     "module.bilibilisearch.title": "Ricerca video",
     "module.bilibilisearch.placeholder": "aggiungi una parola chiave, es. musica",

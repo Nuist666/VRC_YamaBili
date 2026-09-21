@@ -1,5 +1,7 @@
 # Bilibili 视频搜索模块 —— 开发与排错笔记
 
+> **v1.1.0（2026-09-21）**：关键词结果支持一键翻页、播放和入队。使用前配置有限的记录 URL 池，详见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
+
 > 面向二次开发：文件清单、架构取舍、布局公式、真实踩过的坑、对 YamaPlayer 核心做的改动。
 > 安装、配置与使用请看 [README.md](README.md) 和 [INSTALL.md](INSTALL.md)；
 > 后端接口契约看 [BACKEND.md](BACKEND.md)。
@@ -10,11 +12,11 @@
 ```
 Modules/BilibiliSearch/
 ├─ BilibiliSearch.cs                  模块入口（YamaPlayerModule），面板调用它
-├─ BilibiliSearchService.cs           拼 URL、下载 JSON、解析
+├─ BilibiliSearchService.cs           选择预置 URL、下载 JSON、解析
 ├─ BilibiliSearchResult.cs            一页搜索结果的纯数据容器
 ├─ BilibiliSearchUI.cs                面板显示 / 滚动 / 三个操作按钮
 ├─ BilibiliSearchResultAction.cs      单元格内按钮 → 面板的转发器
-├─ BiliResultList.cs                  结果列表的循环滚动（模块自带，不依赖核心修复）
+├─ BilibiliResultList.cs                  结果列表的循环滚动（模块自带，不依赖核心修复）
 ├─ BiliUrlUtility.cs                  请求 URL 的解析 / 改页（纯静态工具）
 ├─ BiliText.cs                        面板文案的内置兜底表（编辑器 + 运行时共用）
 ├─ *.asset                            UdonSharp 的 program asset（Unity 自动生成，跟着走）
@@ -24,17 +26,27 @@ Modules/BilibiliSearch/
 ├─ DeepSeekIcon.png / CodexIcon.png   版本浮层里两个 AI 署名的图标（官方 logo，纯白 + 透明）
 ├─ Author.png                          版本浮层里的作者头像（自己替换即可）
 ├─ Localization.Runtime.json          面板文案（9 种语言）
+├─ README.md                           项目首页（面向使用者）
 ├─ INSTALL.md                          安装与配置说明（面向使用者）
+├─ CHANGELOG.md                        版本号与更新内容的唯一出处
+├─ DIRECT_ACTIONS.md                   直接操作与记录 URL 池的唯一出处
 ├─ LICENSE.md / NOTICE.md              许可证（MIT）与第三方署名
 ├─ BACKEND.md                          后端接口要求（自建服务必须满足的契约）
 ├─ DEVELOPMENT.md                      本文（开发与排错笔记）
 ├─ Yamadev.YamaStream.Modules.BilibiliSearch.asmdef
 └─ Editor/
-   ├─ BilibiliSearchPanelSetup.cs     一键生成 prefab 的工具
+   ├─ BilibiliSearchPanelSetup.cs     一键生成 prefab 的工具（`Version` / `Changelog` 常量也在这里）
+   ├─ BilibiliSearchDirectSetup.cs   URL 池烘焙、版本迁移、构建检查（-3200）
+   ├─ BilibiliSearchDirectTests.cs   编辑器回归断言
    ├─ BilibiliSearchRepair.cs         场景里模块的修复 / 绑定工具
    ├─ Localization.Editor.json        模块名 / 描述（编辑器显示）
    └─ Yamadev.YamaStream.Modules.BilibiliSearch.Editor.asmdef
 ```
+
+> 文档分工（避免同一件事写两遍）：**版本与更新内容**只在 [CHANGELOG.md](CHANGELOG.md)；
+> **直接操作与编号池**（原理、烘焙、范围限制、后端约定）只在
+> [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)；**后端字段契约**只在 [BACKEND.md](BACKEND.md)；
+> **安装与配置**只在 [INSTALL.md](INSTALL.md)；本文只写开发视角的取舍与排错。
 
 > ★ 三个生成物**故意放在模块目录里**（和 `Modules/PitchShifter` 等官方模块一样），
 > 这样整个 `Modules/BilibiliSearch` 目录就是自包含的：拷到别的工程即可用，
@@ -85,7 +97,7 @@ Modules/BilibiliSearch/
 - **资源侧**：删掉整个 `Modules/BilibiliSearch/` 目录 —— 生成物、U# program asset、
   本地化、图标都在里面，不会有残留。
 - **顺序：先删场景实例，再删目录**，否则场景里会留下 Missing Prefab。
-- 两处 YamaPlayer 核心修复**不用回滚**（独立 bug 修复，不依赖本模块）。
+- 已有 YamaPlayer 核心修复**不用回滚**（独立 bug 修复，不依赖本模块）。
 
 无论走哪条路，上传前照常走 YamaPlayer 的 build。模块通过两个 `ModuleUISlot` 注入 UI：
 
@@ -118,11 +130,7 @@ UIController.Localization.cs(132,49)
 
 ## 三、使用
 
-> **重要（VRChat 的限制）**：脚本**不能**把字符串变成 URL。
-> Udon 里 `new VRCUrl(string)` 不可用，`VRCUrlInputField.text` 也不可写。
-> 所以请求 URL 的**最终值只能由玩家在 URL 输入框里补全**，这正是搜索框用
-> `VRCUrlInputField` 的原因。生成工具会把默认前缀**预填**进输入框（并序列化成
-> `_defaultSearchUrl`），玩家只需要在光标后面补关键词。
+> Udon 无法在运行时构造 `VRCUrl`：初次关键词搜索使用玩家填写的输入框，翻页 / 播放 / 入队从编辑器预生成的 `?srid=` 地址池选取。**原理、烘焙工具与范围限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)**，本节不再重复。
 
 - **入口**：主页面左侧图标列最上面那个 **B 站图标**（就在原来的「输入 URL」图标上方）。
   点它展开面板，再点一次收起；面板里的 **关闭** 按钮同样能收起。
@@ -138,28 +146,22 @@ UIController.Localization.cs(132,49)
   > 注意副作用：键盘已经打开时再点一次搜索框也会重置（会丢掉刚打的字）。
   > 另外面板第一次被激活时 `VRCUrlInputField.Awake()` 会清空保存的文本，所以
   > `ShowPanel(true)` 之后也会再补一次默认值。
-- **翻页**：点「上一页 / 下一页」时脚本会弹出一个确认框 —— 因为 VRChat 只认可玩家
-  输入的 URL，脚本不能代改。按提示把框里的新 URL 复制、粘贴到 URL 框并完成输入，
-  再点「确认执行」。
+- **翻页**：点击直接调用 `BilibiliSearchService.SearchPage`，按当前**原始响应**最后一条记录编号的 +1 / +2 查编号池取得上一页 / 下一页地址；逻辑关键词与页码保留。分页在 BV 过滤与 `_maxResults` 截断之前计算，细节见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 - 每条结果之间有一条 **分割线**（结果单元格底部的 3px 亮条），按钮下面留了一行空白再画线。
 - 每条结果：
   - **复制链接**：弹出链接确认框，点链接后用 VRChat 键盘的复制功能复制
     `https://www.bilibili.com/video/BV号`。这个框**只有「关闭」**（复制完就是关掉，
     「确认执行」在这里没有别的意义，所以被隐藏了）。
-  - **播放**：仍然是「关闭 + 确认执行」两个按钮 —— 粘贴播放 URL 并完成输入后点确认。
-    - **当前没有在播** → 直接播放，然后**自动关掉确认框和搜索面板，回到主界面**。
+  - **播放**：按行对应的 `recordsid` 查表取得完整 URL，点击直接执行。
+    - **当前没有在播** → 直接播放，然后**自动关掉搜索面板，回到主界面**。
     - **当前已有视频在播** → 不打断它，改为把这条**加入待播队列**，面板保持打开并提示
       「当前有视频正在播放，已加入待播队列。」。
   - **添加到待播队列**：加入 YamaPlayer 的播放队列（`Controller.Queue.AddTrack`）。
     加入成功后该条的队列按钮**禁用 10 秒**，防止重复添加。
-- **关于队列按钮有时还要粘贴一次 URL**：VRChat 只认可**玩家输入**的 `VRCUrl`，脚本无法
-  用字符串构造 `VRCUrl`（`new VRCUrl(string)` 在 Udon 里不可用）。所以：
-  - 如果你已经为这条视频粘贴确认过一次播放链接，脚本会**记住这个 VRCUrl**，
-    之后点「添加到待播队列」就是**一次点击**直接入队；
-  - 还没确认过时，会先弹出和播放一样的确认框让你粘贴一次播放链接。
-- **版本按钮**：标题右边紧挨着一个小按钮（显示 `v1.0.0`），点开一个版本浮层。浮层仿照
+- **首次入队也无需粘贴**：与播放共用预置记录地址；保留权限检查、所有权处理和防重复冷却。
+- **版本按钮**：标题右边紧挨着一个小按钮（显示 `v1.1.0`），点开一个版本浮层。浮层仿照
   YamaPlayer 自己的版本信息页排版：
-  - 顶部**居中**的项目名 + 版本号 `BiliBili Search v1.0.0`（Primary 配色），
+  - 顶部**居中**的项目名 + 版本号 `BiliBili Search v1.1.0`（Primary 配色），
     **竖直分割线的顶端正好接在它下面**；
   - 分割线**左半边**：作者头像在上（320×240，占分割线上半段），下面五行
     （`VRChat / Twitter / Github / DeepSeek / Codex`），第一行与头像之间**空一行**
@@ -170,8 +172,7 @@ UIController.Localization.cs(132,49)
       图标是随模块分发的官方 logo（`DeepSeekIcon.png` / `CodexIcon.png`，纯白 + 透明，见第六节）；
       （这两行文字最长，行块宽度由它们决定，图标列仍然对齐、整块仍在头像中线上居中）
   - 分割线**右半边**：`更新履歴` 标题 + 更新记录，**可滚动**（`ScrollRect` +
-    `ContentSizeFitter`，内容有多高就滚多高）——以后加记录直接往
-    `VersionChangelogValue` 的文本里追加行就行；
+    `ContentSizeFitter`，内容有多高就滚多高）——以后加记录修改 `BilibiliSearchPanelSetup.Changelog` 常量，再烘焙或生成 prefab；
   - 左上角是返回按钮（`← 返回`），**回到哔哩哔哩搜索面板**（不是 YamaPlayer 主界面）。
   - 整个浮层是按**父容器顶部中心**锚定的，不依赖 1600×900 这个具体尺寸。
   - 账号那三行**只有图标 + 值，没有标签文字**（`VRChat账号 / 推特 / Github / 项目名`
@@ -185,7 +186,7 @@ UIController.Localization.cs(132,49)
     `Packages/net.kwxxw.yama-stream/Assets/Images/` 取（找不到就按文件名全工程搜一遍）。
   - 头像是模块目录里的 **`Author.png`**（320×240、圆形、四角透明）。工具只会强制它的导入
     设置为 `Sprite` + 保留透明通道，换图直接替换这个文件即可。
-- **面板自己有两个标签页**（就在顶栏里、`v1.0.0` 左边那两个按钮，顺序是
+- **面板自己有两个标签页**（就在顶栏里、`v1.1.0` 左边那两个按钮，顺序是
   `[网址输入] [关键词搜索]`，`BilibiliSearchUI.ShowUrlTab()` / `ShowSearchTab()` 切换
   `UrlTab` / `SearchTab` 两个容器，**默认停在网址输入**：`ShowPanel(true)` 里会调 `ShowUrlTab()`）：
   - **关键词搜索**：搜索框（`_defaultSearchUrl`）+ 结果列表；切到它时会
@@ -202,7 +203,7 @@ UIController.Localization.cs(132,49)
     - 输入栏挂了 `EventTrigger(PointerDown)` → `ResetUrlInput()`：**点击即清除并写回前缀**；
       切到这个标签页时也会写一次（输入栏第一次激活时 `VRCUrlInputField.Awake` 会清空文本）。
     - `PlayUrlInput()` 直接播输入栏里的 `VRCUrl` —— 这个框是玩家自己输入的，所以**不需要**
-      结果行那套"复制→粘贴→确认"流程。没在播就播并关面板，在播就入队。
+      额外的确认流程。没在播就播并关面板，在播就入队。
       **没有客户端校验**：只要是空输入就提示 `msg.emptyUrl`，其它情况一律把输入栏里的 `VRCUrl`
       原样交给后端（后端同时支持 BV 号与完整链接）。播放失败 → `msg.urlPlayFailed`
       （用 `BiliUrlUtility.VideoId()` 取 BV 号当轨道标题，取不到就用 `BiliBili`）。
@@ -225,25 +226,14 @@ UIController.Localization.cs(132,49)
 | 简介 | `description` |
 | BV 号 | `id` |
 
-没有用到的字段（`image` / `mid` / `recordsid`）会被忽略。一页最多显示 20 条
-（`BilibiliSearchService` 的 `_maxResults` 可调）。
+`recordsid` 解析为正整数并与显示结果一一对齐；`image` / `mid` 不使用。先扫描完整原始响应，只有全部编号连续有效时才推算末条 +1 / +2 分页记录，再过滤无效 BV 并按 `_maxResults` 截断（默认 20）。不能用过滤后的末条推算分页。
 
-**`id` 不是合法 BV 号的条目会被直接过滤掉**，不会进入列表。因为「复制链接 / 播放 / 加入队列」
-都要用 `id` 拼 `https://www.bilibili.com/video/<id>`，而 VRChat 又要求 URL 由玩家授权，
-没有 BV 号的条目（例如接口返回的 AV 号视频、或 `id` 字段缺失）点了只会提示
-「该结果没有有效 BV 号」—— 所以干脆在解析阶段就丢掉：
-
-```csharp
-if (!BiliUrlUtility.IsBv(ReadString(item, "id"))) continue;   // ParseResults 里两趟都过滤
-```
-
-因此「N 个视频」显示的是**过滤后真正可用的条数**，可能少于接口这一页返回的条数。
-解析分两趟：第一趟数出合法条数（上限 `_maxResults`）用来开数组，第二趟填数据。
+BV 用于复制网页链接与结果身份校验，播放和入队使用记录 URL。坏 JSON / 下载失败保留旧页；空页保留返回上一页的请求。多面板动作校验当前结果数组及行的 BV、recordsid，防止陈旧行误播。
 
 ## 五、架构（为什么这样分层）
 
-- **面板（`BilibiliSearchUI`）只跟模块（`BilibiliSearch`）说话**，
-  播放/加队列也走 `_search.PlayResult(...)` / `_search.AddResultToQueue(...)`。
+- **面板通过模块执行播放/入队，通过 Service 请求分页**，
+  播放/加队列也走 `_search.PlayConfirmed(...)` / `_search.QueueConfirmed(...)`。
   原因：`_controller` 是 `YamaPlayerModule` 的 `protected` 字段，
   而面板继承的是 `YamaPlayerListener`，**拿不到它**。
   其它模块（`SlideShowerUI` 等）也是这个套路。
@@ -262,6 +252,8 @@ if (!BiliUrlUtility.IsBv(ReadString(item, "id"))) continue;   // ParseResults �
 | --- | --- |
 | `_baseUrl` | 接口前缀，由生成工具填入你在 setup 窗口里配置的地址（仓库里没有默认域名） |
 | `_maxResults` | 每页最多显示多少条 |
+| `RecordUrlStart` / `RecordUrlCapacity` | 编辑器生成记录 URL 池的起点和数量；默认 550000 / 100000 |
+| `RecordUrls` | 完整地址数组，只在编辑器烘焙，运行时按编号查表 |
 
 面板 prefab 根节点上的 `BilibiliSearchUI` 还有几个和 URL 有关的字段：
 
@@ -277,7 +269,7 @@ if (!BiliUrlUtility.IsBv(ReadString(item, "id"))) continue;   // ParseResults �
 文字块 `InfoHeight` 140、按钮离底部 36 ↔ 分割线 3 等），改完重新 Generate 一次即可。
 
 > 面板顶栏**没有标题**了（为了省纵向空间删掉了 `TitleText`）：现在是
-> `[网址输入] [关键词搜索] [v1.0.0] 状态文字 … 页码` 一行（默认停在网址输入页）。
+> `[网址输入] [关键词搜索] [v1.1.0] 状态文字 … 页码` 一行（默认停在网址输入页）。
 > `module.bilibilisearch.title` 这个 key 仍留在 `Localization.Runtime.json` / `BiliText.cs` 里，
 > 但面板已经没有任何地方用它（`UpdateTranslation()` 只写标签、状态、按钮和浮层文案）。
 
@@ -327,7 +319,13 @@ Cell (240)
 同一种观感。想换图标直接替换这两个 png（保持文件名）即可，工具的 `ResolveIcon()` 会强制它们
 按 UI sprite 导入。
 
-## 七、排错（这几条都真实踩过）
+## 七、排错（含旧版本历史问题）
+
+**首次生成报 `outdated script version`**：缺失程序资产在生成过程中才被创建，UdonSharp 的脚本升级在后续 Editor update 执行；仅调用 `CompileSync()` 不会升级 `ScriptVersion`。生成工具现于创建资产前设置 `sourceCsScript`，重新导入旧失败资产以触发官方升级，等待所有模块程序的脚本版本就绪后编译，并验证编译状态再序列化。等待期间不创建临时 prefab 对象；序列化失败时清理本轮临时对象。不要直接修改版本字段伪装已升级或已编译。
+
+下表中涉及核心 `LoopScroll` 补丁的条目**都是 v1.0.0 的旧记录**；v1.1.0 使用模块自带 `BilibiliResultList`，不需要这些核心补丁。各版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
+
+直接操作回归入口：**Tools → YamaPlayer → Bilibili Search → Run Direct Action Regression Tests**。发布前还需 Udon Editor / World 编译，以及 ClientSim / VRChat 的搜索、翻页、播放、入队验证。版本对应的验证记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 **最快的自查方式：直接读 Unity 的 Editor.log**（比 Console 显示得全）：
 
@@ -340,7 +338,7 @@ Cell (240)
 | 报错 | 真实原因 | 改法 |
 | --- | --- | --- |
 | `CS0246: BilibiliSearchUI could not be found`（Editor 脚本里，4 条） | **Editor asmdef 没引用模块自己的 asmdef** | Editor asmdef 的 `references` 里补 `GUID:b963ea13fc7fbf54d8842912fa2c92ca`（= 模块 asmdef 的 guid）。可对照 `Modules/PitchShifter/Editor/*.Editor.asmdef` |
-| 移植到别的项目后**关键词搜索最多只显示一条视频**、或**结果行整体偏右 / 行叠在一起**，本项目正常 | 那个项目的 `LoopScroll.cs` 是 YamaPlayer 原版（模块单独拷过去了，两处核心修复没跟过去）。原版在列表第一次初始化时量视口高度，而这时列表所在页面刚被激活、视口还没算出高度，行池就固定成 1 行且永不增长 | ① 合入 `LoopScroll.cs` 的修复（见第 2 步 / 第九节）—— 生成窗口会用 `BilibiliSearchRepair.HasLoopScrollFix()` 检测并弹红框；② 模块侧也已经迁就：结果列表会等它所在标签页显示一帧后才激活，让 `LoopScroll` 在视口有高度之后才首次初始化（解决"只有一行"）—— 但行复用坐标归位、底部半行仍在核心代码里，不打补丁仍会偏右/叠行 |
+| 移植到别的项目后**关键词搜索最多只显示一条视频**、或**结果行整体偏右 / 行叠在一起**（v1.0.0 的旧记录） | 那个项目的 `LoopScroll.cs` 是 YamaPlayer 原版，而当时模块复用核心的 `LoopScroll`。原版在列表第一次初始化时量视口高度，而这时列表所在页面刚被激活、视口还没算出高度，行池就固定成 1 行且永不增长 | v1.1.0 起**不再适用**：模块自带 `BilibiliResultList.cs`，不依赖核心补丁（见第九节）。仍在用 v1.0.0 的话：① 合入 `LoopScroll.cs` 的修复 —— 生成窗口会用 `BilibiliSearchRepair.HasLoopScrollFix()` 检测并弹红框；② 模块侧会等所在标签页显示一帧后才激活列表，让视口有高度后再首次初始化（解决"只有一行"）—— 但行复用坐标归位、底部半行仍在核心代码里，不打补丁仍会偏右/叠行 |
 | `CS0246: IVRCStringDownload could not be found` | 漏 `using VRC.SDK3.StringLoading;` | 补 using。**不要**改用 `object` 参数，会丢掉 Udon 的强类型派发 |
 | `CS0103: The name 'Utilities' does not exist` | 漏 `using VRC.SDKBase;` | 补 using |
 | `CS1061: 'BilibiliSearch' does not contain 'Search'` | 模块里没有对应方法 | 面板调用的每个动作都要在 `BilibiliSearch` 上有对应 public 方法 |
@@ -396,11 +394,12 @@ prefab 里内嵌的颜色写的是 YamaPlayer 的默认配色
 
 ## 九、和 YamaPlayer 核心的关系
 
-**模块不依赖对核心的任何修改。** 早期版本让面板复用 YamaPlayer 的 `LoopScroll`，
-因此必须给核心打补丁（行池按当前视口高度扩容、每行用模板几何重新盖章），
+**模块不依赖对核心的任何修改。** v1.0.0 时面板复用 YamaPlayer 的 `LoopScroll`，
+因此当时必须给核心打补丁（行池按当前视口高度扩容、每行用模板几何重新盖章），
 移植到新工程时常常忘了这一步，表现就是"关键词搜索只显示一条"或"结果行整体偏右、行叠行"。
+**这不是 v1.1.0 的行为**，版本差异见 [CHANGELOG.md](CHANGELOG.md)。
 
-现在模块自带 **`BiliResultList.cs`**（同一套循环滚动逻辑的模块内版本，公开 API 一致：
+现在模块自带 **`BilibiliResultList.cs`**（同一套循环滚动逻辑的模块内版本，公开 API 一致：
 `LineCount` / `SetUp` / `Indexes` / `OnScroll` / `ScrollToTop`），面板 prefab 里放的是它，
 所以：
 

@@ -1,206 +1,90 @@
-# 后端要求（Backend requirements）
+# 后端要求
 
-模块自己**不抓 B 站**：它把「搜索」和「播放」两件事交给一个 **你自己部署的 HTTP 服务**。
-本文件规定这个服务必须满足的接口，照着实现就能和模块对接。
+模块不包含后端。作者配置自己的 HTTPS 播放服务，初次搜索由玩家填写 URL，后续翻页、播放及入队使用编辑器预置的记录 URL。安装和编号池设置见 [INSTALL.md](INSTALL.md)、[DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
-> 本文只描述**接口契约**，不含任何抓取实现，也不指向任何现成服务。
-> 具体怎么从 B 站拿到数据、如何合法合规地使用，由部署者自行决定并承担责任。
+## 请求与环境
 
----
+- Base URL 示例：`https://bili.example.com/player/`，不带 query 或 fragment，必须使用有效 HTTPS 证书。
+- Udon 字符串下载使用 GET，不能自定义 UA、Cookie、Authorization 或请求体。服务必须兼容目标 Unity / VRChat 版本的请求头。
+- 本次调查的后端会根据 UA 区分响应：UnityWebRequest 获得 JSON，媒体解析链路获得媒体重定向。普通浏览器或 curl 返回 403 不足以认定 Unity 请求也失败。
+- 字符串下载和视频播放是不同链路；VRChat 客户端需要允许对应域名，非信任域名需启用 Allow Untrusted URLs。
+- 模块搜索请求间隔至少 5.1 秒；服务应控制响应大小、缓存及超时。
 
-## 0. 为什么必须是自建后端
+## 初次搜索
 
-| VRChat / Udon 的限制 | 后果 |
-| --- | --- |
-| 脚本不能用字符串构造 `VRCUrl` | URL 只能由玩家在 URL 输入框里补全 → 需要预填的固定地址 |
-| `VRCStringDownloader` 只能发 **GET**，不能带自定义请求头、Cookie、Body | 需要 B 站签名 / Referer / UA / Cookie 的那一步必须放在服务端 |
-| 客户端直连 | 域名必须公网可达、`https` 且证书有效 |
-| 播放器（AVPro Video）只吃媒体流 | 播放接口必须最终给出可播放的视频流，不能是网页 |
-
-所以：**客户端 → 你的后端 → B 站**。后端是唯一的「重型」部分。
-
----
-
-## 1. 部署硬性要求
-
-| 项 | 要求 |
-| --- | --- |
-| 协议 | `https://`，证书由公共 CA 签发（自签会被 VRChat 拒绝） |
-| 方法 | 只用到 **GET**，匿名访问，不能要求登录 / Cookie / 自定义头 |
-| 请求头 | 客户端只会带 VRChat 自己的 UA，**不会**带 `Referer`、`Origin`、`Authorization` |
-| 端口 | 443（URL 里不要带端口，除非确实需要且公网可达） |
-| CORS | 不需要（不是浏览器发的请求） |
-| 响应编码 | **UTF-8**（模块用 UTF-8 解码 JSON 与关键词） |
-| 响应体积 | 建议 **< 32 KB**：只回当前页需要的字段。VRChat 的字符串下载有体积上限，Udon 解析也在主线程上 |
-| 延迟 | 建议 < 3 s；模块自己的请求节流是 **5.1 秒一次搜索** |
-| 稳定性 | 建议加缓存与限流；不要每个请求都直连 B 站 |
-
-路径没有强制要求：模块只关心「基地址」这一件事。文档与示例里统一用
-`https://<你的域名>/player/` 作为基地址（`Base URL`）。
-
----
-
-## 2. 接口一：搜索
-
-```
-GET {Base URL}?page={页码}&keyword={关键词}
+```text
+GET {Base URL}?page=1&keyword=关键词
 ```
 
-| 参数 | 说明 |
-| --- | --- |
-| `page` | 页码，从 1 开始，模块限制在 **1..9999** |
-| `keyword` | 搜索关键词。UTF-8；客户端可能把它百分号编码，后端按 UTF-8 解码即可 |
+`page` 为 1..9999，`keyword` 非空。输入地址必须匹配配置的 Base URL，参数只允许 page 与 keyword。关键词按 UTF-8 解码。
 
-示例：
-
-```
-GET https://bili.example.com/player/?page=1&keyword=音楽
-```
-
-### 响应
-
-UTF-8 JSON。**两种包装都支持**：
-
-```json
-[ { … }, { … } ]
-```
-```json
-{ "data":   [ { … }, { … } ] }     // "result" 或 "list" 键同样接受
-```
-
-每条结果的字段（键名**大小写敏感**）：
-
-| 键 | 类型 | 用途 | 备注 |
-| --- | --- | --- | --- |
-| `id` | string | **BV 号**，用来拼 `https://www.bilibili.com/video/{id}` | 必须是 **12 位、以 `BV` 开头、后面全是字母数字**；**不满足的条目会被直接丢弃**（`av` 号视频因此不显示） |
-| `title` | string | 结果标题 | 可空 |
-| `channelTitle` | string | UP 主 | 可空 |
-| `description` | string | 简介 | 可空，太长会被面板截断 |
-| `image` | string | 封面 URL | 模块**不显示封面**（不下载图片），可以省略，但保留它对以后兼容更好 |
-
-- 每页最多显示 **20** 条（模块 prefab 上 `BilibiliSearchService._maxResults` 可改，1..50）；
-  多出来的会被忽略，所以后端按 20 条左右返回即可。
-- 数组顺序就是显示顺序。
-- 非字符串类型的值一律当空字符串处理。
-
-示例响应：
+响应支持顶层数组，或 `data` / `result` / `list` 包装数组：
 
 ```json
 [
   {
     "id": "BV1xx411c7mD",
-    "title": "【测试】示例视频标题",
+    "title": "示例标题",
     "channelTitle": "示例UP主",
     "description": "示例简介",
-    "image": "https://i0.hdslb.com/bfs/archive/xxxx.jpg"
+    "recordsid": "550577"
   }
 ]
 ```
 
-### 失败时
-
-- **不要**返回 HTML 错误页（会被当成「不是 JSON 数组」）。
-- 空结果直接返回 `[]` 即可，面板会显示「没有搜索到视频」。
-- HTTP 4xx/5xx 会让面板显示下载失败；可以对失败请求做短时缓存避免连续打后端。
-
----
-
-## 3. 接口二：播放
-
-```
-GET {Base URL}?url={B 站视频页地址}
-```
-
-| 参数 | 说明 |
+| 字段 | 类型与用途 |
 | --- | --- |
-| `url` | B 站视频地址**或** BV 号。由模块**直接拼接**，`url=` 后面就是原样的内容（**没有做百分号编码**）。客户端会校验这一项：只要里面能找到一个 12 位 BV 号就算合法，所以下面这些都能进来 —— 建议后端**两种都接受** |
+| `id` | 12 位 BV 号，BV 后为字母数字；无效条目不显示 |
+| `title` / `channelTitle` / `description` | 字符串；缺失或非字符串按空文本处理 |
+| `recordsid` | 正整数字符串或 JSON 整数，不超过 2147483647；对应后端记录 |
+| `image` / `mid` | 当前不使用 |
 
-示例（模块实际发出的形式）：
+每页默认最多显示 20 条，`_maxResults` 可设置 1..50。`recordsid` 不是 BV 的固定映射：同一视频再次解析可分配新的记录。记录一旦分配，在播放或排队使用期间必须保持可解析且不得改指向其他视频。
 
-```
-GET https://bili.example.com/player/?url=https://www.bilibili.com/video/BV1xx411c7mD
-GET https://bili.example.com/player/?url=BV1xx411c7mD
-GET https://bili.example.com/player/?url=https://www.bilibili.com/video/BV1xx411c7mD?p=2&t=30
-```
+空结果返回 `[]`。下载或 JSON 解析失败会保留客户端旧页；不要用 HTTP 200 + HTML 错误页伪装有效搜索响应。
 
-> 这是玩家在面板「网址输入」标签页里补全的那条 URL（面板会预填 `{base}?url=`，玩家只补后半段）。
-> 标准的 query 解析（取 `url` 参数的值）就能拿到它。
-> 面板**不做客户端校验**：只要输入栏不是空的，里面的 URL 就原样发给你，所以后端要自己判断
-> `url` 参数是 **裸 BV 号**（`BV1xx411c7mD`）还是**完整视频页链接**（可能带 `/XXX`、`?p=2`、`#reply`），
-> 两种都要能解析（最简单的做法：先从字符串里抽出 BV 号，再走同一套解析）。
-> 面板不会做百分号编码，但也请容忍被编码过的形式。
+## 分页记录
 
-### 响应
+本模块采用本次实测的 BiliPlayer 记录约定（版本号见 [CHANGELOG.md](CHANGELOG.md)）：设**完整原始响应**最后一条记录编号为 L，则：
 
-必须让 AVPro Video **直接播起来**，两种做法都行：
-
-| 做法 | 说明 |
+| 动作 | 请求 |
 | --- | --- |
-| **302 / 307 跳转**到真实媒体直链（推荐） | 最简单，CDN 流量不经过你的服务器 |
-| 自己代理媒体流 | 直链有 Referer/UA 防盗链、或需要改 m3u8 时用 |
+| 上一页 | `GET {Base URL}?srid=L+1` |
+| 下一页 | `GET {Base URL}?srid=L+2` |
 
-约束：
+这些记录应在服务端绑定对应关键词及目标页，响应仍为上述搜索 JSON。客户端要求原始数组的所有记录编号连续有效后才推算分页，在过滤无效 BV 与截断显示条数之前计算 L。
 
-- **不能返回 HTML 播放页**（`Content-Type: text/html` 会被播放器当媒体流打开，直接失败）。
-- 建议 `Content-Type: video/mp4`（或 `application/vnd.apple.mpegurl`）；直链场景下由 CDN 给出即可。
-- 需支持 HTTP **Range** 请求（拖动进度条要用），否则只能顺序播放。
-- 建议把清晰度限制在 **1080p 及以下**：VRChat 客户端解码能力有限，4K 会卡或直接失败。
-- 音视频最好是 AVPro 能解的封装（H.264/AAC 的 mp4、或 HLS m3u8）。
+例如原始结果为 549866..549885，下一页请求为 `?srid=549887`。后续页应根据**新响应**重新推算，不能把请求编号机械地加 22；其他用户请求可能使全局编号跳跃。
 
----
+这不是通用的 B 站 API 规则。自建后端必须实现相同的记录分配约定；只返回 `recordsid` 并不足够。客户端的连续性检查不能证明分页记录没有被并发请求抢占，服务端必须保证当前结果及其分页记录的正确关联。空页不产生可推算记录，客户端保留刚才成功页的原始请求用于返回。
 
-## 4. URL 约定
+## 视频记录与媒体链路
 
-- 模块**不校验域名**：解析只看 query 里的 `page` / `keyword`。所以任何域名都能用，
-  换域名也不用改代码，重新 Generate 一次 prefab 即可。
-- 搜索 URL 必须**恰好**有 `page` 和 `keyword` 两个参数（多一个参数就会被判为非法 URL，
-  面板会提示「请输入完整的搜索 URL」）。这是为了避免玩家误把随便一个地址贴进搜索框。
-- 播放 URL 不需要模块解析，它只是交给播放器的字符串。
-
----
-
-## 5. 实现提示（经验，不是契约）
-
-- **搜索**：B 站搜索接口需要 `User-Agent`、可能还需要 WBI 签名 / Cookie（`buvid3` 等），
-  直接透传客户端的 UA 经常吃 `412`。建议在服务端固定一套可用凭据并做结果缓存
-  （同一 `page+keyword` 缓存几十秒到几分钟）。
-- **取流**：B 站视频流有 Referer 防盗链，通常需要带 `Referer: https://www.bilibili.com`
-  和正常 UA；直链有时效（几十分钟），不要长期缓存，或每次跳转都重新解析。
-- **清晰度**：优先挑 H.264（avc）而不是 HEVC/AV1，兼容性最好。
-- **并发与限流**：世界可能有多个玩家同时搜；建议按 IP 与全局两个维度限流，
-  并对上游做连接池/退避重试，避免把 B 站打挂、也避免自己的 IP 被封。
-- **日志与隐私**：不要记录玩家的 VRChat 身份信息；如果记录 IP，请在文档里说明。
-- **合规提醒**：B 站没有对外开放的官方视频 API，相关接口属于非公开接口。
-  自建仅供个人学习/自用，请自行评估服务条款、版权与分发风险；
-  **不要把带 Cookie 的服务公开共享**。
-
----
-
-## 6. 自测清单
-
-部署完先用 `curl` 确认，再接进 VRChat：
-
-```bash
-# 1. 搜索：应返回 JSON 数组，且 id 是 12 位 BV 号
-curl -s "https://bili.example.com/player/?page=1&keyword=music" | head -c 400
-
-# 2. 应能被 json 解析，且至少有 1 条
-curl -s "https://bili.example.com/player/?page=1&keyword=music" | python -m json.tool | head -20
-
-# 3. 播放：应看到 302 到 CDN，或直接是 video/* 流
-curl -sI "https://bili.example.com/player/?url=https://www.bilibili.com/video/BV1xx411c7mD"
-
-# 4. 证书：必须是公共 CA 签发
-curl -svo /dev/null "https://bili.example.com/player/?page=1&keyword=test" 2>&1 | grep -i "SSL certificate"
+```text
+GET {Base URL}?srid=550577
 ```
 
-| 检查项 | 期望 |
-| --- | --- |
-| 搜索响应 | `Content-Type` 不强制，但 body 必须是 UTF-8 JSON 数组（或 `data`/`result`/`list` 包装） |
-| `id` | 12 位、`BV` 开头；不是的话该条会被面板丢弃 |
-| 播放响应 | `302`/`307` 到媒体直链，或 `200` + `video/*`；**不能是 HTML** |
-| Range | `curl -r 0-1023` 应返回 `206 Partial Content` |
-| 证书 | 公共 CA，无自签、无过期 |
-| 鉴权 | 不能要求 Cookie / Token / 自定义头 |
+当编号对应结果中的视频记录时，这就是该视频的播放解析入口。模块把预置的完整 `VRCUrl` 交给 YamaPlayer 的 AVPro 播放 / 队列管线，不从 JSON 拼出临时 CDN 地址。
 
-最后在 VRChat 里确认客户端设置 **Allow Untrusted URLs** 已打开，否则请求仍然会被拒。
+本次抓包观察到的链路：yt-dlp 请求 srid → 后端 302 → Bili CDN MP4；VRChat 媒体请求 CDN 并使用 Range；UnityWebRequest 请求同一 srid 则返回 JSON。服务端应兼容实际媒体解析器和 Unity 请求，不能假定所有 UA 都返回相同内容。
+
+后端最终需要提供播放器可用的媒体重定向或媒体流，支持 Range；若 Unity 请求该记录返回元数据，不能因此把 JSON 当成视频交给播放器。入队保存的是 srid 解析入口，避免长期保存会过期的 CDN 签名 URL。
+
+## 网址输入标签页
+
+```text
+GET {Base URL}?url=BV1xx411c7mD
+GET {Base URL}?url=https://www.bilibili.com/video/BV1xx411c7mD
+```
+
+该页仍由玩家补全输入，模块只拦截空输入，将用户提供的 VRCUrl 交给播放器。后端负责校验、解析 BV 或完整视频页链接。输入框预填 `{Base URL}?url=`，玩家应保留前缀。不要依赖客户端替服务端做参数验证。
+
+## 对接验证
+
+1. 使用目标 Unity 版本的 UnityWebRequest 获取搜索结果，检查 BV、recordsid、原始编号连续性及分页记录。
+2. 点击上一页、下一页，比较实际返回视频与相同关键词的 page=N 响应。检查第一页、末页、空页及并发搜索。
+3. 验证编号位于编辑器生成的池内；默认 550000..649999，超出范围必须重新配置、烘焙及上传。
+4. 用真实媒体链路 GET 视频 srid，检查重定向、最终媒体和 Range；HEAD 或通用 curl UA 不能代替这一步。
+5. 在 VRChat 检查第一次点击即播放、第一次点击即入队、播放中点击播放改为入队、权限和多人同步。
+
+后端上游凭据与取流逻辑由服务端负责，不应把 Cookie 或私有凭据分发到世界资源中。

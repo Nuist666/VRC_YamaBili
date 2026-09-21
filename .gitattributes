@@ -1,0 +1,15 @@
+# 统一换行，避免 Windows 上出现 CRLF/LF 反复改动的噪音
+* text=auto eol=lf
+
+# Unity 资源：png 交给 Git 的 LFS 无关处理，禁止换行转换
+*.png binary
+*.asset binary
+*.prefab binary
+*.unity binary
+
+# Unity 的 YAML 资源在 text 模式下 diff 更可读
+*.meta text
+*.asmdef text
+*.json text
+*.md text
+*.cs text

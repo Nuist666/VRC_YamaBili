@@ -28,6 +28,9 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     /// only list a module the project has a prefab for: dropping Modules/BilibiliSearch into
     /// another project is then enough to make the module available there.
     /// </summary>
+    public const string Version = "1.1.0";
+    public const string Changelog = "v1.1.0\n検索結果のページ切り替え・再生・キュー追加をワンクリックで実行できるようにしました。\n\nv1.0.0\n初回リリース";
+
     private const string DefaultOutputFolder = "Packages/net.kwxxw.yama-stream/Modules/BilibiliSearch";
     /// <summary>Where the prefabs used to be generated before they moved into the package.</summary>
     private const string LegacyOutputFolder = "Assets/Yamadev/YamaPlayerGenerated";
@@ -616,12 +619,31 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       window._targetPath = DefaultTargetPath;
       window._siblingIndex = -1;
       window._instantiateInScene = false;
+      window._destroyAfterGeneration = true;
       window.Generate();
-      DestroyImmediate(window);
+      if (_generationOwner != window) DestroyImmediate(window);
     }
+
+    private static BilibiliSearchPanelSetup _generationOwner;
+    private bool _destroyAfterGeneration;
+    private double _generationDeadline;
+    private static readonly Type[] ProgramTypes = {
+      typeof(BilibiliSearch), typeof(BilibiliSearchService), typeof(BilibiliSearchResult),
+      typeof(BilibiliSearchUI), typeof(BilibiliSearchResultAction), typeof(BilibiliResultList)
+    };
 
     private void Generate()
     {
+      if (_generationOwner != null)
+      {
+        Debug.LogWarning("[BilibiliSearch] Prefab generation is already waiting for UdonSharp.");
+        return;
+      }
+      if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling)
+      {
+        Debug.LogError("[BilibiliSearch] Exit Play mode and wait for Unity C# compilation before generating prefabs.");
+        return;
+      }
       if (string.IsNullOrEmpty(_outputFolder))
       {
         Debug.LogError("[BilibiliSearch] Output folder is empty.");
@@ -670,15 +692,69 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       // imports settle so the behaviours built below can be compiled right away.
       AssetDatabase.Refresh();
 
+      // Script upgrades are queued by the asset importer and run on EditorApplication.update.
+      // CompileSync only compiles; it does not perform those upgrades on newly created assets.
+      _generationOwner = this;
+      _generationDeadline = EditorApplication.timeSinceStartup + 120;
+      EditorApplication.update += WaitForProgramsAndGenerate;
+      Debug.Log("[BilibiliSearch] Preparing UdonSharp programs; prefab generation will continue automatically.");
+    }
+
+    private static void WaitForProgramsAndGenerate()
+    {
+      var owner = _generationOwner;
+      if (owner == null)
+      {
+        EditorApplication.update -= WaitForProgramsAndGenerate;
+        return;
+      }
+      try
+      {
+        if (EditorApplication.timeSinceStartup > owner._generationDeadline)
+          throw new InvalidOperationException("UdonSharp programs did not become ready within 120 seconds. Check the Console for script upgrade or compilation errors.");
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+          throw new InvalidOperationException("Prefab generation cancelled because Play mode started.");
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating) return;
+        if (EditorUtility.scriptCompilationFailed)
+          throw new InvalidOperationException("Resolve Unity C# compilation errors before generating prefabs.");
+        foreach (var type in ProgramTypes)
+        {
+          var asset = UdonSharpEditorUtility.GetUdonSharpProgramAsset(type);
+          if (asset == null) throw new InvalidOperationException("Missing UdonSharp program asset: " + type.Name);
+          if (asset.ScriptVersion < UdonSharpProgramVersion.CurrentVersion) return;
+        }
+        UdonSharp.Compiler.UdonSharpCompilerV1.CompileSync();
+        if (UdonSharpProgramAsset.AnyUdonSharpScriptHasError())
+          throw new InvalidOperationException("UdonSharp compilation failed. Prefabs were not generated; see the compiler errors above.");
+        foreach (var type in ProgramTypes)
+        {
+          var asset = UdonSharpEditorUtility.GetUdonSharpProgramAsset(type);
+          if (asset.CompiledVersion < UdonSharpProgramVersion.CurrentVersion)
+            throw new InvalidOperationException("UdonSharp program did not compile: " + type.Name);
+        }
+        owner.BuildAndSavePrefabs();
+      }
+      catch (Exception exception) { Debug.LogException(exception); }
+      // Returns while waiting leave the callback registered. Success and failure release it.
+      EditorApplication.update -= WaitForProgramsAndGenerate;
+      _generationOwner = null;
+      if (owner._destroyAfterGeneration) DestroyImmediate(owner);
+    }
+
+    private void BuildAndSavePrefabs()
+    {
       string panelPath = $"{_outputFolder}/{PanelPrefabName}.prefab";
       string modulePath = $"{_outputFolder}/{ModulePrefabName}.prefab";
       // Save over the existing assets so GUIDs and scene prefab links survive.
-      UdonSharp.Compiler.UdonSharpCompilerV1.CompileSync();
-
-      GameObject panelInstance = BuildPanel();
-      SyncProxiesToUdon(panelInstance);
-      GameObject panelPrefab = SaveFreshPrefab(panelInstance, panelPath);
-      DiscardTemporary(panelInstance);
+      GameObject panelInstance = null;
+      GameObject panelPrefab;
+      try
+      {
+        panelInstance = BuildPanel();
+        SyncProxiesToUdon(panelInstance);
+        panelPrefab = SaveFreshPrefab(panelInstance, panelPath);
+      }
+      finally { DiscardTemporary(panelInstance); }
 
       if (panelPrefab == null)
       {
@@ -686,10 +762,15 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
         return;
       }
 
-      GameObject moduleInstance = BuildModule(panelPrefab);
-      SyncProxiesToUdon(moduleInstance);
-      GameObject modulePrefab = SaveFreshPrefab(moduleInstance, modulePath);
-      DiscardTemporary(moduleInstance);
+      GameObject moduleInstance = null;
+      GameObject modulePrefab;
+      try
+      {
+        moduleInstance = BuildModule(panelPrefab);
+        SyncProxiesToUdon(moduleInstance);
+        modulePrefab = SaveFreshPrefab(moduleInstance, modulePath);
+      }
+      finally { DiscardTemporary(moduleInstance); }
 
       if (modulePrefab == null)
       {
@@ -748,13 +829,21 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       }
     }
 
-    private static GameObject SaveFreshPrefab(GameObject root, string path)    {
+    private static GameObject SaveFreshPrefab(GameObject root, string path)
+    {
       // A corrupt existing prefab can retain stale proxy components during matching/overwrite.
       // Serialize to a new asset first, then replace only the prefab bytes, keeping its GUID.
       string staging = AssetDatabase.GenerateUniqueAssetPath(Path.GetDirectoryName(path) + "/BilibiliSearch-Staging.prefab");
       try
       {
         PrefabUtility.SaveAsPrefabAsset(root, staging);
+        // Reimporting a selected prefab can leave Unity's Inspector tracking removed components.
+        // Generate selects the finished module again after both assets have been saved.
+        if (AssetDatabase.GetAssetPath(Selection.activeObject) == path)
+        {
+          Selection.activeObject = null;
+          ActiveEditorTracker.sharedTracker.ForceRebuild();
+        }
         File.Copy(staging, path, true);
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
         return AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -840,7 +929,13 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
 
     private static void EnsureProgramAsset(Type behaviourType, string fallbackScriptPath)
     {
-      if (UdonSharpEditorUtility.GetUdonSharpProgramAsset(behaviourType) != null) return;
+      var existing = UdonSharpEditorUtility.GetUdonSharpProgramAsset(behaviourType);
+      if (existing != null)
+      {
+        if (existing.ScriptVersion < UdonSharpProgramVersion.CurrentVersion)
+          AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(existing), ImportAssetOptions.ForceUpdate);
+        return;
+      }
 
       MonoScript script = FindMonoScript(behaviourType) ?? AssetDatabase.LoadAssetAtPath<MonoScript>(fallbackScriptPath);
       if (script == null)
@@ -856,6 +951,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       if (programAsset == null)
       {
         programAsset = ScriptableObject.CreateInstance<UdonSharpProgramAsset>();
+        // Assign before CreateAsset/MoveAsset so UdonSharp's importer can queue the upgrade.
+        programAsset.sourceCsScript = script;
 
         // Unity cannot create assets inside Packages, so create in Assets and move it.
         if (scriptPath.StartsWith("Packages/"))
@@ -881,6 +978,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       programAsset.sourceCsScript = script;
       EditorUtility.SetDirty(programAsset);
       AssetDatabase.SaveAssets();
+      // Also repairs assets left behind by an earlier failed first-time generation.
+      AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
     }
 
     private static MonoScript FindMonoScript(Type behaviourType)
@@ -923,7 +1022,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       var definition = root.AddComponent<YamaPlayerModuleDefinition>();
       definition.moduleName = "BilibiliSearch";
       definition.moduleDescription = "Bilibili video search.";
-      definition.version = "1.0.0";
+      definition.version = Version;
       definition.allowMultiple = false;
       definition.noNeedSetUp = true;
       definition.moduleNameTranslationKey = "module.bilibilisearch.name";
@@ -947,6 +1046,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
         else Debug.LogWarning("[BilibiliSearch] Could not pre-fill the base url; set it manually on the Service component.");
       }
       serviceSerialized.ApplyModifiedPropertiesWithoutUndo();
+      BilibiliSearchDirectSetup.Bake(service);
 
       var resultHost = new GameObject("SearchResult");
       resultHost.transform.SetParent(root.transform, false);
@@ -1085,7 +1185,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
 
       // Version button, right of the tabs. The label is a literal: BiliText returns an unknown key
       // unchanged, and the version string is deliberately not translated.
-      var versionButton = NewButton("VersionButton", topBar, "VersionButtonText", "v1.0.0", uiBehaviour, nameof(BilibiliSearchUI.OpenVersionPanel), 18);
+      var versionButton = NewButton("VersionButton", topBar, "VersionButtonText", "v" + Version, uiBehaviour, nameof(BilibiliSearchUI.OpenVersionPanel), 18);
       SetFixedWidth((RectTransform)versionButton.transform, 104f);
 
       var status = NewText("StatusText", topBar, 20, TextAnchor.MiddleLeft, new Color(0.75f, 0.75f, 0.78f));
@@ -1645,7 +1745,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       // the translation.
       var name = NewText("VersionName", overlay, 42, TextAnchor.MiddleCenter, Color.white);
       PinTopCenter(name.rectTransform, 0f, -50f, 800f, 64f);
-      name.text = "BiliBili Search v1.0.0";
+      name.text = "BiliBili Search v" + Version;
       SetColorRole(name.gameObject, ColorType.Primary);
 
       // Vertical divider between the left half (avatar and accounts) and the changelog. It starts
@@ -1759,7 +1859,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       Stretch(changelog.rectTransform);
       changelog.horizontalOverflow = HorizontalWrapMode.Wrap;
       changelog.verticalOverflow = VerticalWrapMode.Overflow;
-      changelog.text = "v1.0.0\n初回リリース";
+      changelog.text = Changelog;
 
       BuildScrollbar(scroll, scrollRect);
     }

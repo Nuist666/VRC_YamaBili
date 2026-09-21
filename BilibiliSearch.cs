@@ -72,8 +72,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
     /// <summary>
     /// Plays an entry of a result page. The controller lives on the module, the panel
     /// (a YamaPlayerListener) has no access to it, so the action is routed through here.
-    /// The play url has to be authored by the player: VRChat does not let a script turn a
-    /// string into a VRCUrl, so the panel's input field is used as the source.
+    /// The URL is selected from the editor-baked srid pool and validated against the
+    /// current result and the sender's displayed row before changing playback.
     /// </summary>
     /// <returns>0 when nothing happened, 1 when playback started, 2 when the track was
     /// queued because a video was already playing.</returns>
@@ -82,10 +82,11 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
       if (!Utilities.IsValid(sender) || !Utilities.IsValid(_result) || !Utilities.IsValid(_service)) return 0;
       if (!Utilities.IsValid(Controller) || index < 0 || index >= _result.Count) return 0;
       if (!BiliUrlUtility.IsBv(_result.Ids[index]) || VRCUrl.IsNullOrEmpty(url)) return 0;
-      if (url.Get() != _service.BuildPlayUrl(_service.GetBilibiliVideoUrl(_result.Ids[index]))) return 0;
+      if (!_service.MatchesResultUrl(index, url) || !sender.MatchesDisplayedResult(index, _result.Ids[index], _result.RecordIds[index])) return 0;
       if (!sender.CheckPlayPermission()) return 0;
       if (Controller.FindHandlerIndexForUrl(url) < 0) return 0;
 
+      if (Controller.IsPlaying && !sender.CheckQueuePermission()) return 0;
       object[] track = TrackUtils.NewTrack(VideoPlayerType.AVProVideoPlayer, _result.Titles[index], url);
       Controller.TakeOwnership();
 
@@ -117,6 +118,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
       if (!sender.CheckPlayPermission()) return 0;
       if (Controller.FindHandlerIndexForUrl(url) < 0) return 0;
 
+      if (Controller.IsPlaying && !sender.CheckQueuePermission()) return 0;
       object[] track = TrackUtils.NewTrack(VideoPlayerType.AVProVideoPlayer, title, url);
       Controller.TakeOwnership();
 
@@ -137,9 +139,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
       if (!Utilities.IsValid(sender) || !Utilities.IsValid(_result) || !Utilities.IsValid(_service)) return false;
       if (!Utilities.IsValid(Controller) || index < 0 || index >= _result.Count) return false;
       if (!BiliUrlUtility.IsBv(_result.Ids[index]) || VRCUrl.IsNullOrEmpty(url)) return false;
-      if (url.Get() != _service.BuildPlayUrl(_service.GetBilibiliVideoUrl(_result.Ids[index]))) return false;
+      if (!_service.MatchesResultUrl(index, url) || !sender.MatchesDisplayedResult(index, _result.Ids[index], _result.RecordIds[index])) return false;
       if (!sender.CheckQueuePermission()) return false;
-
       object[] track = TrackUtils.NewTrack(VideoPlayerType.AVProVideoPlayer, _result.Titles[index], url);
       Controller.TakeOwnership();
       Controller.Queue.AddTrack(track);

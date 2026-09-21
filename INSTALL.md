@@ -1,5 +1,7 @@
 # 安装与配置（BiliBili Search for YamaPlayer）
 
+> **当前版本 v1.1.0（2026-09-21）**：关键词结果支持一键翻页、播放和入队。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
+
 在 YamaPlayer 的屏幕上加一个 B 站视频搜索面板：搜关键词 → 从列表里挑一条 →
 **复制链接 / 播放 / 加入待播队列**，支持翻页。
 
@@ -8,6 +10,7 @@
 > 地址由你在下面第 3 步自己填。服务端要实现什么，见 [BACKEND.md](BACKEND.md)。
 >
 > 想了解内部实现 / 二次开发 → [DEVELOPMENT.md](DEVELOPMENT.md)
+> 直接操作（翻页 / 播放 / 入队）与编号池的原理、烘焙和范围限制 → [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)
 
 ---
 
@@ -31,8 +34,9 @@
 > 先自备 YamaPlayer（**v2.0.0 及以上**，开发与验证用的是 **v2.0.0-beta.7**），
 > 再把模块放进去。
 
-1. 从仓库或发布页的 `BilibiliSearch-v1.0.0.zip` 拿到 **`BilibiliSearch/`** 这个文件夹，
-   整个拷到已有 YamaPlayer 包的 `Modules/` 下（和 `Modules/PitchShifter` 同级）：
+1. 从当前仓库（`https://github.com/Nuist666/VRC_YamaBili`）取得**根目录下的全部内容**，
+   整体拷到已有 YamaPlayer 包的 `Modules/BilibiliSearch/` 下（和 `Modules/PitchShifter` 同级）。
+   仓库根目录**没有** `Assets/`、`Packages/` 包裹层，不要把整份仓库当成 Unity 工程打开：
 
    ```
    <你的工程>/
@@ -43,7 +47,7 @@
             └─ BilibiliSearch/           ← 本模块
    ```
 
-   **`.cs` / `.asset` / `.png` / `.meta` 都要拷**，缺 `.meta` 会丢 GUID。
+   **`.cs` / `.asset` / `.png` / `.meta` 都要拷**，缺 `.meta` 会丢 GUID。保留仓库的 `Editor/` 子目录，其中包含编辑器脚本、Editor asmdef 与 `Localization.Editor.json`；脚本清单与工具用法见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 2. **不需要改 YamaPlayer 核心**：模块自带结果列表（`BilibiliResultList.cs`），
    不依赖 YamaPlayer `LoopScroll` 的修复，装上重新 Generate 一次就能正常显示多行。
@@ -63,7 +67,19 @@
 
 ## 3. 配置你自己的后端地址（必做）
 
-菜单 **Tools → YamaPlayer → Bilibili Search Setup**（打开配置窗口；`Generate Prefabs` / `Uninstall from Scene` 在旁边的 **Bilibili Search** 子菜单里）
+菜单 **Tools → YamaPlayer → Bilibili Search Setup** 打开配置窗口。本模块在
+`Tools → YamaPlayer` 下的菜单一览（避免找不到入口）：
+
+| 菜单项 | 作用 |
+| --- | --- |
+| `Bilibili Search Setup`（顶层） | 填 Base URL 并 **Generate Prefabs** 的配置窗口 |
+| `Bilibili Search / Generate Prefabs` | 同上窗口的生成动作（已配置过地址时可直接用） |
+| `Bilibili Search / Direct Action URLs` | 烘编号池、更新版本与履历，见第 3.0 步 |
+| `Bilibili Search / Uninstall from Scene` | 从场景移除所有模块实例 |
+| `Bilibili Search / Run Direct Action Regression Tests` | 回归断言 |
+| `Repair Bilibili Search Scene` / `Validate Bilibili Search`（顶层） | 场景修复与自检 |
+
+窗口里只有一项设置：
 
 ```
 Backend
@@ -71,29 +87,40 @@ Backend
 ```
 
 - 填**你自己部署的**服务地址，**以 `/player/` 结尾**（末尾斜杠会自动补）。
-  填 `http://` 或 `https://` 开头的完整地址；填了 query（`?…`）会被自动去掉。
+  填 `https://` 开头的完整地址；填了 query（`?…`）会被自动去掉。
 - **没填之前 `Generate Prefabs` 按钮是灰的** —— 这是故意的：仓库不发布任何服务器地址。
 - 地址存在 `EditorPrefs`（键 `Yamadev.YamaStream.BilibiliSearch.BackendBaseUrl`），
   换机器、换工程要重新填一次。
 
-点 **Generate Prefabs**，工具会用这个地址预填三处：
+点 **Generate Prefabs**，工具会用这个地址生成默认编号池并预填以下字段：
+
+首次安装时，工具会自动补齐缺失的 UdonSharp 程序资产，等待脚本版本升级和编译完成后继续生成，无需重复点击。等待期间 Console 会显示 `Preparing UdonSharp programs`。如果 Unity / Udon 编译失败，先处理 Console 中的编译错误，再重试生成。
 
 | 位置 | 生成的内容 |
 | --- | --- |
 | 面板搜索框（`_defaultSearchUrl`） | `{Base URL}?page=1&keyword=` |
-| YamaPlayer 的 URL 输入框（`_defaultPlayUrl`） | `{Base URL}?url=` |
+| 模块网址输入框（`_defaultPlayUrl`） | `{Base URL}?url=` |
 | 模块 `Service` 组件的 `_baseUrl` | `{Base URL}` |
+
+### 3.0 编号池（直接操作）什么时候要重做
+
+生成 Prefabs 时会用当前 Base URL 烘出默认编号池，一般无需单独操作。以下情况需要重做：
+换域名、后端编号已经超出池范围、或升级已有模块想更新版本与履历。
+
+做法：**Tools → YamaPlayer → Bilibili Search → Direct Action URLs** → 设置编号范围 →
+**Bake module prefab**。原理、默认范围、资源开销与范围限制见
+**[DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)**，版本变化见 [CHANGELOG.md](CHANGELOG.md)。
 
 ### 3.1 面板的标签页：网址输入（默认）与关键词搜索
 
-面板顶栏里有两个标签按钮（在 `v1.0.0` 左边），点它们切换；面板没有标题栏，那一行就是全部顶栏：
+面板顶栏里有两个标签按钮（在 `v1.1.0` 左边），点它们切换；面板没有标题栏，那一行就是全部顶栏：
 
 | 标签页 | 内容 |
 | --- | --- |
 | **网址输入**（默认，打开面板就是它） | 输入栏（预填 `{Base URL}?url=`）+ **播放** + **关闭** + 下方两段说明 |
 | **关键词搜索** | 搜索框（预填 `{Base URL}?page=1&keyword=`）+ 结果列表 + 上一页/下一页/关闭 |
 
-顶栏从左到右是 `[网址输入] [关键词搜索] [v1.0.0] 状态文字 … 页码`。
+顶栏从左到右是 `[网址输入] [关键词搜索] [v1.1.0] 状态文字 … 页码`。
 
 网址输入页的行为：
 
@@ -132,9 +159,7 @@ Modules/BilibiliSearch/
 └─ PanelFrame.png                 ← 圆角胶囊用的 9-slice 白图
 ```
 
-> **运行时代码里没有域名**：搜索框里的 URL 是唯一的请求来源，解析器只看
-> `page=` / `keyword=` 两个参数，跟主机名无关。所以以后换域名只要重新 Generate
-> 一次（或者直接在场景里改 prefab 上那三个字段），不用改代码。
+> **运行时代码里没有固定后端域名**。初次搜索必须匹配配置的 Base URL；翻页、播放和入队从编辑器生成的 `RecordUrls` 选择完整地址。换域名后需同步更新输入框前缀、Service Base URL 并重新烘焙池。
 
 ---
 
@@ -167,7 +192,7 @@ Modules/BilibiliSearch/
 3. **删掉 `Modules/BilibiliSearch/` 整个目录**：脚本、`.asset`（UdonSharp program asset）、
    本地化、图标、以及生成物（`BilibiliSearch.prefab`、`BilibiliSearchPanel.prefab`、
    `BilibiliIcon.png`、`PanelFrame.png`）都在里面，一起删干净，不会有残留。
-4. **两处 YamaPlayer 核心修复可以保留**：它们是独立的 bug 修复，不依赖本模块，
+4. **已有的 YamaPlayer 核心修复可以保留**：它们独立于本模块，
    留着不会报错；想完全回到原版就把那两个文件换回上游版本。
 5. 生成工具存在 `EditorPrefs` 里的后端地址（`Yamadev.YamaStream.BilibiliSearch.BackendBaseUrl`）
    是编辑器本地设置，留着无副作用；想清掉删注册表
@@ -201,7 +226,7 @@ YamaPlayer 本地化会抛异常、面板文字失效。装法：
 
 ## 6. 用法
 
-1. 进世界后，点主页面左侧图标列最上面的 **B 站图标** 展开面板。顶栏是 [网址输入] [关键词搜索] [v1.0.0] 状态 … 页码 一行，点前两个按钮切标签页，**默认停在「网址输入」**。
+1. 进世界后，点主页面左侧图标列最上面的 **B 站图标** 展开面板。顶栏是 [网址输入] [关键词搜索] [v1.1.0] 状态 … 页码 一行，点前两个按钮切标签页，**默认停在「网址输入」**。
 
 **网址输入页（默认）**
 
@@ -220,16 +245,13 @@ YamaPlayer 本地化会抛异常、面板文字失效。装法：
    - **复制链接** → 弹窗里复制 `https://www.bilibili.com/video/BV…`
    - **播放** → 没在播就直接播；**已经在播就不打断，改成加入待播队列**
    - **加入队列** → 加进 YamaPlayer 的待播队列，加完该按钮禁用 10 秒
-5. 翻页用 **上一页 / 下一页**（会弹出确认框，需要你把新 URL 粘进 URL 框并确认 —— 
-   这是 VRChat 的限制：脚本不能自己构造 URL）。
-   右端的 **关闭** 同样回到主界面。
+5. 翻页用 **上一页 / 下一页**：点击后直接请求对应页面，无需粘贴确认；搜索请求间隔至少 5.1 秒。右端的 **关闭** 回到主界面。
 
 **其他**
 
-6. 面板顶栏里的 **`v1.0.0`** 按钮打开版本浮层，左上角 `← 返回` 回到搜索面板。
+6. 面板顶栏里的 **`v1.1.0`** 按钮打开版本浮层，左上角 `← 返回` 回到搜索面板。
 
-> 搜索结果里的「播放 / 加入队列」第一次点会要求你粘贴一次播放链接（因为脚本不能构造 URL）；
-> 而**网址输入页不需要这一步**：那个框就是玩家自己输入的。
+> 搜索结果的播放与入队从第一次点击起就直接执行；后端 `recordsid` 必须有效且位于预置范围内。复制链接按钮仍保留复制窗口。
 
 ---
 
@@ -237,14 +259,16 @@ YamaPlayer 本地化会抛异常、面板文字失效。装法：
 
 | 现象 | 原因 / 处理 |
 | --- | --- |
+| 提示更新搜索模块 / 无法直接操作 | `recordsid` 无效、超出编号池范围，或池与 Base URL 不一致；重新烘焙并重传，见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md) |
+| 提示「搜索结果已更新，请重新搜索」 | 面板显示的结果已被新的一次搜索替换；重新搜索即可 |
+| 提示「操作过于频繁」 | 搜索请求间隔 5.1 秒、播放间隔 5.1 秒、入队冷却 10 秒；稍等再点 |
 | 搜索结果一直失败、Console 里 `Access Denied` | VRChat 没开 **Allow Untrusted URLs**，或后端证书无效 |
 | 列表里空空如也，状态栏写「该结果没有有效 BV 号」 | 后端返回的条目 `id` 不是 12 位 BV 号；见 [BACKEND.md](BACKEND.md) 的字段表 |
-| 点搜索没反应 | 搜索框内容不是合法请求 URL（必须同时有 `page=` 和 `keyword=`，且关键词非空） |
+| 点搜索没反应 | 搜索框内容不是合法请求 URL（必须匹配配置的 Base URL，同时有 `page=` 和 `keyword=`，且关键词非空） |
 | 面板上的按钮点了没用 / 列表底部空一块 / 结果行偏右、行叠行 | 用的是旧版本模块（依赖 YamaPlayer `LoopScroll` 的修复）。当前版本自带结果列表，重新 Generate 一次即可 |
-| **结果行整体偏右 / 行与行叠在一起** | 同样是那个项目的 `LoopScroll.cs` 没打补丁（原版 `UpdatePosition()` 只改 y、保留每个复用行自带的横向位置）。生成窗口现在会直接弹红框提示：`This YamaPlayer does not have the LoopScroll fix the module needs`；按 DEVELOPMENT 第九节把改动合进去即可 |
 | 模块列表里显示 `module.bilibilisearch.name` | 重开 Inspector / 重新点 ModuleManager；仍不行说明 `Localization.Editor.json` 没随模块拷过去 |
 | `Generate Prefabs` 按钮是灰的 | 还没填 Base URL，见第 3 步 |
-| **菜单里找不到 Bilibili Search Setup** | 路径是 `Tools → YamaPlayer → Bilibili Search Setup`（和 `Repair Bilibili Search Scene` 同一层）。若整个 YamaPlayer 子菜单都没有，说明模块的 Editor 程序集没编译过：看 Console 有没有 `error CS`，并确认 `.cs` / `.asmdef` / `.meta` 都拷全了 |
+| **菜单里找不到 Bilibili Search Setup** | 路径是 `Tools → YamaPlayer → Bilibili Search Setup`（顶层，和第 3 步的菜单表一致）；`Repair Bilibili Search Scene` / `Validate Bilibili Search` 是它同级的顶层项。若整个 Bilibili Search 子菜单都没有，说明模块的 Editor 程序集没编译过：看 Console 有没有 `error CS`，并确认 `.cs` / `.asmdef` / `.meta` 都拷全了 |
 | 换域名后还是请求旧地址 | 重新跑一次 Generate Prefabs（搜索框与网址输入页的预填值都来自那个地址） |
 | 网址输入页点「播放」没反应 | 输入栏里必须保留 `{Base URL}?url=` 前缀，只在后面粘 B 站链接；缺前缀会提示"请保留解析前缀" |
 | Console 出现 `Removed N url box handler(s)...` | 正常：这是在清理旧版本残留在 YamaPlayer URL 框上的点击事件 |
@@ -256,29 +280,34 @@ YamaPlayer 本地化会抛异常、面板文字失效。装法：
 ## 8. 目录结构
 
 ```
-Modules/BilibiliSearch/
+Modules/BilibiliSearch/                  ← 仓库根目录的内容原样放在这里
 ├─ BilibiliSearch.cs                  模块入口（YamaPlayerModule）
-├─ BilibiliSearchService.cs           下载 JSON、解析结果
+├─ BilibiliSearchService.cs           选择预置 URL、下载 JSON、解析结果
 ├─ BilibiliSearchResult.cs            一页结果的纯数据容器
 ├─ BilibiliSearchUI.cs                面板显示 / 滚动 / 操作按钮
 ├─ BilibiliSearchResultAction.cs      单元格按钮 → 面板的转发器
-├─ BiliUrlUtility.cs                  请求 URL 的解析（与域名无关）
-├─ BiliText.cs                        面板文案的内置兜底表
+├─ BilibiliResultList.cs              结果列表的循环滚动（模块自带）
+├─ BiliUrlUtility.cs / BiliText.cs   请求 URL 解析、文案兜底
 ├─ Localization.Runtime.json          面板文案（9 种语言）
 ├─ Author.png                         版本浮层里的作者头像
 ├─ DeepSeekIcon.png / CodexIcon.png   版本浮层里的两个 AI 署名图标
 ├─ *.asset                            UdonSharp program asset（Unity 自动生成）
+├─ README.md / INSTALL.md / BACKEND.md / DEVELOPMENT.md   说明文档
+├─ CHANGELOG.md / DIRECT_ACTIONS.md   版本履历 / 直接操作与编号池
+├─ LICENSE.md / NOTICE.md             许可证（MIT）与第三方署名
 ├─ BilibiliSearch.prefab              ★ 生成物：模块 prefab
 ├─ BilibiliSearchPanel.prefab         ★ 生成物：面板 prefab
 ├─ BilibiliIcon.png / PanelFrame.png  ★ 生成物：图标与圆角图
 └─ Editor/
-   ├─ BilibiliSearchPanelSetup.cs     生成 prefab 的工具（也就是第 3 步那个窗口）
+   ├─ BilibiliSearchPanelSetup.cs     生成 prefab 的工具（第 3 步那个窗口）
+   ├─ BilibiliSearchDirectSetup.cs   编号池烘焙、版本更新、构建检查
+   ├─ BilibiliSearchDirectTests.cs   直接操作回归检查
    ├─ BilibiliSearchRepair.cs         场景里模块的修复 / 自检工具
    ├─ Localization.Editor.json        模块名 / 描述
    └─ *.asmdef                        程序集定义
 ```
 
-★ 的三个是**生成物**：仓库里不提供（也不提供任何服务器地址），第一次用必须先跑
+★ 标记的是**生成物**：仓库里不提供（也不提供任何服务器地址），第一次用必须先跑
 第 3 步生成；换域名、换配色、改布局之后重新生成一次即可。
 
 ---

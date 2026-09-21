@@ -17,11 +17,17 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
     public string[] Channels = new string[0];
     public string[] Descriptions = new string[0];
     public string[] Covers = new string[0];
+    public int[] RecordIds = new int[0];
+    public int PreviousRecordId;
+    public int NextRecordId;
     public string Error = string.Empty;
 
     public void Clear()
     {
       Count = 0;
+      RecordIds = new int[0];
+      PreviousRecordId = 0;
+      NextRecordId = 0;
       Error = string.Empty;
       Ids = new string[0];
       Titles = new string[0];

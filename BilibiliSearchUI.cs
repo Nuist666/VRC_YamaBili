@@ -66,16 +66,9 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
              "It is a serialized field because Udon cannot build a VRCUrl from a string.")]
     [SerializeField] private VRCUrl _defaultPlayUrl;
 
-    private string _expectedLink = "";
-    private string _loadedUrl = "";
-    private int _linkAction;
-    private int _playIndex;
     private float _nextPlayTime;
     /// <summary>Per result: the time the queue button becomes usable again.</summary>
     private float[] _queueReadyAt = new float[0];
-    /// <summary>Per result: the play url the player already confirmed, reusable for the queue.</summary>
-    private VRCUrl[] _confirmedUrls = new VRCUrl[0];
-    private bool[] _confirmedUrlValid = new bool[0];
     private UIController _uiController;
     private Controller _controller;
     private bool _initialized;
@@ -91,6 +84,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
     private int _resultsCount;
     private int _currentPage = 1;
     private string _keyword = string.Empty;
+    private int[] _recordIds = new int[0];
     private string[] _ids = new string[0];
     private string[] _titles = new string[0];
     private string[] _channels = new string[0];
@@ -419,7 +413,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
       ResolveReferences();
       if (!_initialized || _searching) return;
       int page = BiliUrlUtility.Page(RequestUrl.Get());
-      if (page == 0) { SetStatusKey("module.bilibilisearch.msg.invalidUrl"); return; }
+      if (page == 0 || !RequestUrl.Get().StartsWith(_service.BaseUrlString + "?")) { SetStatusKey("module.bilibilisearch.msg.invalidUrl"); return; }
       _search.SetActiveUI(this);
       _search.Search(ExtractKeyword(), page);
     }
@@ -431,9 +425,12 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
     private void PreparePage(int page)
     {
       if (!_initialized || _searching) return;
-      string url = BiliUrlUtility.ChangePage(_loadedUrl, page);
-      if (url == "") return;
-      ShowLink(url, 1);
+      if (!Utilities.IsValid(_service) || !Utilities.IsValid(_search)) return;
+      if (!MatchesDisplayedPage()) { SetStatusKey("module.bilibilisearch.msg.staleResults"); return; }
+      _search.SetActiveUI(this);
+      int outcome = _service.SearchPage(page);
+      if (outcome == 0) SetStatusKey("module.bilibilisearch.msg.recordUnavailable");
+      else if (outcome == 2) SetStatusKey("module.bilibilisearch.msg.cooldown");
     }
 
     public void OnSearchStarted(string keyword, int page)
@@ -457,7 +454,6 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
       }
 
       if (!string.IsNullOrEmpty(result.Error)) { OnSearchFailed(result); return; }
-      _loadedUrl = _service.LastSuccessfulUrl;
       ApplyResult(result);
       if (Utilities.IsValid(_resultsScroll)) _resultsScroll.ScrollToTop();
     }
@@ -484,6 +480,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
       _keyword = result.Keyword;
       _currentPage = result.Page;
       _resultsCount = result.Count;
+      _recordIds = result.RecordIds;
       _ids = result.Ids;
       _titles = result.Titles;
       _channels = result.Channels;
@@ -504,20 +501,18 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
     }
 
     /// <summary>
-    /// Drops the queue cooldown and the cached urls, because every index now points at a
-    /// different video.
+    /// Resets per-row cooldowns when a new result page replaces the displayed rows.
     /// </summary>
     private void ResetActionState(int count)
     {
       if (count < 0) count = 0;
       _queueReadyAt = new float[count];
-      _confirmedUrls = new VRCUrl[count];
-      _confirmedUrlValid = new bool[count];
     }
 
     private void ClearResults()
     {
       _resultsCount = 0;
+      _recordIds = new int[0];
       _ids = new string[0];
       _titles = new string[0];
       _channels = new string[0];
@@ -711,81 +706,62 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
     {
       if (_actionIndex < 0 || _actionIndex >= _ids.Length || !Utilities.IsValid(_service)) return;
       if (!BiliUrlUtility.IsBv(_ids[_actionIndex])) { SetStatusKey("module.bilibilisearch.msg.invalidBv"); return; }
-      ShowLink(_service.GetBilibiliVideoUrl(_ids[_actionIndex]), 0);
+      ShowLink(_service.GetBilibiliVideoUrl(_ids[_actionIndex]));
     }
 
-    public void CopyText(string text) { ShowLink(text, 0); }
+    public void CopyText(string text) { ShowLink(text); }
 
-    private void ShowLink(string url, int action)
+    private void ShowLink(string url)
     {
       if (!Utilities.IsValid(_linkDialog) || !Utilities.IsValid(_copyField)) { SetStatusKey("module.bilibilisearch.msg.needRebuild"); return; }
-      _expectedLink = url;
-      _linkAction = action;
       _linkDialog.SetActive(true);
       _copyField.text = url;
-      _confirmInput.SetUrl(VRCUrl.Empty);
-      _confirmInput.gameObject.SetActive(action != 0);
-      // Copying is finished by closing the dialog, so "confirm" would do the same thing.
-      if (Utilities.IsValid(_confirmButton)) _confirmButton.SetActive(action != 0);
-      if (action == 0) _linkHint.text = GetTranslation("module.bilibilisearch.hint.copy");
-      else if (action == 1) _linkHint.text = GetTranslation("module.bilibilisearch.hint.page");
-      else if (action == 3) _linkHint.text = GetTranslation("module.bilibilisearch.hint.queue");
-      else _linkHint.text = GetTranslation("module.bilibilisearch.hint.play");
+      // Keep legacy serialized controls and event bindings compatible with existing prefabs.
+      if (Utilities.IsValid(_confirmInput)) _confirmInput.gameObject.SetActive(false);
+      if (Utilities.IsValid(_confirmButton)) _confirmButton.SetActive(false);
+      if (Utilities.IsValid(_linkHint)) _linkHint.text = GetTranslation("module.bilibilisearch.hint.copy");
     }
 
     public void CloseLink() { if (Utilities.IsValid(_linkDialog)) _linkDialog.SetActive(false); }
     public void Play() { PreparePlay(_actionIndex); }
 
+    public bool MatchesDisplayedResult(int index, string id, int recordId)
+    {
+      return !_searching && index >= 0 && index < _ids.Length && index < _recordIds.Length &&
+        _ids[index] == id && _recordIds[index] == recordId;
+    }
+
+    private bool MatchesDisplayedPage()
+    {
+      return Utilities.IsValid(_result) && _result.Ids == _ids && _result.RecordIds == _recordIds;
+    }
+
     public void PreparePlay(int index)
     {
-      if (_searching || index < 0 || index >= _ids.Length || !Utilities.IsValid(_service)) return;
+      ResolveReferences();
+      if (!_initialized || _searching || index < 0 || index >= _ids.Length || !Utilities.IsValid(_service)) return;
+      if (Time.time < _nextPlayTime) { SetStatusKey("module.bilibilisearch.msg.cooldown"); return; }
+      if (!MatchesDisplayedPage()) { SetStatusKey("module.bilibilisearch.msg.staleResults"); return; }
       if (!BiliUrlUtility.IsBv(_ids[index])) { SetStatusKey("module.bilibilisearch.msg.invalidBv"); return; }
-      _playIndex = index;
-      ShowLink(_service.BuildPlayUrl(_service.GetBilibiliVideoUrl(_ids[index])), 2);
+      VRCUrl url = _service.GetResultUrl(index);
+      if (VRCUrl.IsNullOrEmpty(url)) { SetStatusKey("module.bilibilisearch.msg.recordUnavailable"); return; }
+      int outcome = _search.PlayConfirmed(this, index, url);
+      if (outcome == 0) { SetStatusKey("module.bilibilisearch.hint.playFailed"); return; }
+      _nextPlayTime = Time.time + 5.1f;
+      if (outcome == 2)
+      {
+        _queueReadyAt[index] = Time.time + QueueCooldown;
+        ForceRefreshVisibleCells();
+        SetStatusKey("module.bilibilisearch.msg.queuedWhilePlaying");
+        return;
+      }
+      SetStatusKey("module.bilibilisearch.msg.playing");
+      CloseLink();
+      ShowPanel(false);
     }
 
-    public void ConfirmLink()
-    {
-      if (_linkAction == 0) { CloseLink(); return; }
-      VRCUrl url = _confirmInput.GetUrl();
-      if (url.Get() != _expectedLink) { _linkHint.text = GetTranslation("module.bilibilisearch.hint.mismatch"); return; }
-      if (_linkAction == 1)
-      {
-        if (_searching || _service.IsLoading) return;
-        _searchInput.SetUrl(url);
-        CloseLink();
-        SearchByInput();
-      }
-      else if (_linkAction == 3)
-      {
-        if (!QueueWith(url, _playIndex)) { _linkHint.text = GetTranslation("module.bilibilisearch.hint.playFailed"); return; }
-        CloseLink();
-      }
-      else if (_linkAction == 2)
-      {
-        if (_searching || Time.time < _nextPlayTime) return;
-        int outcome = _search.PlayConfirmed(this, _playIndex, url);
-        if (outcome == 0) { _linkHint.text = GetTranslation("module.bilibilisearch.hint.playFailed"); return; }
-        _nextPlayTime = Time.time + 5.1f;
-        RememberUrl(_playIndex, url);
-
-        if (outcome == 2)
-        {
-          // A video is already playing, so the track went to the queue instead. The panel
-          // stays open so the player can see the status and keep browsing.
-          _queueReadyAt[_playIndex] = Time.time + QueueCooldown;
-          CloseLink();
-          SetStatusKey("module.bilibilisearch.msg.queuedWhilePlaying");
-          return;
-        }
-
-        // The play request went through, so both the confirmation dialog and the search
-        // panel are closed and the player is back on the main page.
-        SetStatusKey("module.bilibilisearch.msg.playing");
-        CloseLink();
-        ShowPanel(false);
-      }
-    }
+    // Kept for existing prefab event bindings; direct actions never open this dialog.
+    public void ConfirmLink() { CloseLink(); }
 
     public bool CheckPlayPermission()
     {
@@ -815,25 +791,12 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
     {
       ResolveReferences();
       int index = _actionIndex;
-      if (!_initialized || index < 0 || index >= _ids.Length) return;
-      if (!BiliUrlUtility.IsBv(_ids[index])) { SetStatusKey("module.bilibilisearch.msg.invalidBv"); return; }
+      if (!_initialized || _searching || index < 0 || index >= _ids.Length || !Utilities.IsValid(_service)) return;
       if (!CanQueue(index)) return;
-
-      // A url the player already confirmed for this result makes the button a single click.
-      // Otherwise the player has to paste the play url, because VRChat only lets the player
-      // author a VRCUrl and a script cannot build one from a string.
-      if (index < _confirmedUrlValid.Length && _confirmedUrlValid[index] &&
-          Utilities.IsValid(_confirmedUrls[index]) && QueueWith(_confirmedUrls[index], index)) return;
-
-      PrepareQueue(index);
-    }
-
-    /// <summary>Opens the confirmation dialog for the queue action.</summary>
-    private void PrepareQueue(int index)
-    {
-      if (_searching || index < 0 || index >= _ids.Length || !Utilities.IsValid(_service)) return;
-      _playIndex = index;
-      ShowLink(_service.BuildPlayUrl(_service.GetBilibiliVideoUrl(_ids[index])), 3);
+      if (!MatchesDisplayedPage()) { SetStatusKey("module.bilibilisearch.msg.staleResults"); return; }
+      VRCUrl url = _service.GetResultUrl(index);
+      if (VRCUrl.IsNullOrEmpty(url)) { SetStatusKey("module.bilibilisearch.msg.recordUnavailable"); return; }
+      if (!QueueWith(url, index)) SetStatusKey("module.bilibilisearch.hint.playFailed");
     }
 
     private bool QueueWith(VRCUrl url, int index)
@@ -841,19 +804,11 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
       if (index < 0 || index >= _queueReadyAt.Length || !Utilities.IsValid(_search)) return false;
       if (!_search.QueueConfirmed(this, index, url)) return false;
 
-      RememberUrl(index, url);
       _queueReadyAt[index] = Time.time + QueueCooldown;
       SetStatusKey("module.bilibilisearch.msg.queued");
       // Update the pooled cells so the disabled queue button shows up right away.
       ForceRefreshVisibleCells();
       return true;
-    }
-
-    private void RememberUrl(int index, VRCUrl url)
-    {
-      if (index < 0 || index >= _confirmedUrls.Length) return;
-      _confirmedUrls[index] = url;
-      _confirmedUrlValid[index] = true;
     }
 
     private void ForceRefreshVisibleCells()

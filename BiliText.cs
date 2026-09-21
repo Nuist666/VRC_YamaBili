@@ -40,6 +40,9 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
       // name, the version string and the changelog heading are the module's own data.
       if (key == "module.bilibilisearch.version.back") return "返回";
 
+      if (key == "module.bilibilisearch.msg.recordUnavailable") return "此结果暂不支持直接操作，请联系地图作者更新搜索模块。";
+      if (key == "module.bilibilisearch.msg.staleResults") return "搜索结果已更新，请重新搜索。";
+      if (key == "module.bilibilisearch.msg.cooldown") return "操作过于频繁，请稍后再试。";
       if (key == "module.bilibilisearch.msg.searching") return "正在搜索…";
       if (key == "module.bilibilisearch.msg.noResult") return "没有搜索到视频";
       if (key == "module.bilibilisearch.msg.resultCount") return "个视频";
