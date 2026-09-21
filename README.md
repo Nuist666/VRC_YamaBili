@@ -50,7 +50,7 @@
 2. `Tools → YamaPlayer → Bilibili Search Setup` 里填 **Base URL**（你自己的后端，
    例如 `https://bili.example.com/player/`），点 **Generate Prefabs**。
    没填之前生成按钮是灰的 —— 仓库不发布任何服务器地址；
-3. 在 **Direct Action URLs** 工具中设置覆盖后端当前 `recordsid` 的编号范围并烘焙（默认 550000–1749999）；
+3. 在 **Direct Action URLs** 工具中设置覆盖后端当前 `recordsid` 的编号范围并烘焙（默认 600000–810002）；
 4. 把生成出来的模块 prefab 加到场景里 YamaPlayer 的 `ModuleManager` 上；
 5. VRChat 客户端里打开 **Allow Untrusted URLs**（自建域名不在信任列表里）。
 

@@ -13,11 +13,11 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
   public class BilibiliSearchDirectSetup : EditorWindow
   {
     public const string ModulePath = "Packages/net.kwxxw.yama-stream/Modules/BilibiliSearch/BilibiliSearch.prefab";
-    private int _start = 550000;
-    private int _capacity = 1200000;
+    private int _start = 600000;
+    private int _capacity = 210003;
     private int _latest = 600000;
-    private int _dailyGrowth = 30000;
-    private int _days = 30;
+    private int _dailyGrowth = 25000;
+    private int _days = 7;
     private const string PendingBake = "BilibiliSearch.PendingBake";
 
     // UdonSharp caches field layouts for the lifetime of the Unity scripting domain.
@@ -97,7 +97,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       if (_dailyGrowth > 0 && _latest >= _start && _latest <= last)
         EditorGUILayout.LabelField("Estimated remaining days", ((last - _latest) / (double)_dailyGrowth).ToString("F1"));
       else EditorGUILayout.HelpBox("Observed ID is outside the pool, or growth is invalid.", MessageType.Warning);
-      EditorGUILayout.HelpBox("At 1,200,000 URLs, text alone is approximately 122 MB for the default endpoint; " +
+      EditorGUILayout.HelpBox("At the default 210,003 URLs, text alone is approximately 22 MB for the default endpoint; " +
         "serialized objects and Udon add overhead. Verify world size, build time and client memory before upload.", MessageType.Warning);
       using (new EditorGUI.DisabledScope(!IsRangeValid(_start, _capacity)))
       {

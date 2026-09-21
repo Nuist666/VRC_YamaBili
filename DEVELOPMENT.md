@@ -252,7 +252,7 @@ BV 用于复制网页链接与结果身份校验，播放和入队使用记录 U
 | --- | --- |
 | `_baseUrl` | 接口前缀，由生成工具填入你在 setup 窗口里配置的地址（仓库里没有默认域名） |
 | `_maxResults` | 每页最多显示多少条 |
-| `RecordUrlStart` / `RecordUrlCapacity` | 编辑器生成记录 URL 池的起点和数量；默认 550000 / 1200000 |
+| `RecordUrlStart` / `RecordUrlCapacity` | 编辑器生成记录 URL 池的起点和数量；默认 600000 / 210003 |
 | `RecordUrls` | 完整地址数组，只在编辑器烘焙，运行时按编号查表 |
 
 面板 prefab 根节点上的 `BilibiliSearchUI` 还有几个和 URL 有关的字段：
@@ -320,6 +320,8 @@ Cell (240)
 按 UI sprite 导入。
 
 ## 七、排错（含旧版本历史问题）
+
+**Generate Prefabs 内存占用高或提示 `Failed to create Object Undo`**：大编号池在生成、序列化和注册场景对象 Undo 时可能产生多份数据；该提示表示对象过大导致 Unity 清空 Undo 缓冲，并不等于生成已经成功。现已缩减新模块默认池；已有大池应按 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md) 缩容后重新 Bake。未重新测量当前默认值的 Editor 内存峰值，也不保证所有工程都不会触发 Undo 限制；生成结果仍需检查 Console 和 prefab。
 
 **首次生成报 `outdated script version`**：缺失程序资产在生成过程中才被创建，UdonSharp 的脚本升级在后续 Editor update 执行；仅调用 `CompileSync()` 不会升级 `ScriptVersion`。生成工具现于创建资产前设置 `sourceCsScript`，重新导入旧失败资产以触发官方升级，等待所有模块程序的脚本版本就绪后编译，并验证编译状态再序列化。等待期间不创建临时 prefab 对象；序列化失败时清理本轮临时对象。不要直接修改版本字段伪装已升级或已编译。
 
