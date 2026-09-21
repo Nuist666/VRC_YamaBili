@@ -40,6 +40,8 @@ Udon 不能在运行时把字符串转成 `VRCUrl`，`VRCUrl` 只能来自序列
 
 烘焙时会校验：编号范围有效、生成结果与 `Base URL` 一致、数量与 `RecordUrlCapacity` 相等。不满足的池会被运行期判定为无效。
 
+点击 Bake 后会先编译 UdonSharp，并重载 Unity 脚本以刷新字段序列化缓存，再自动继续烘焙，无需再次点击。保存前检查起点、数量和 URL 数组已写入 Udon；写入失败会停止保存。这解决了更新脚本后出现 `Field for System.Int32 does not exist` 或 `Field of type 'VRCUrl[]' does not exist any longer` 的问题。
+
 旧 prefab 保留原有配置，不会因脚本默认值变化自动扩容。请填写 **Latest observed record ID**、**Estimated IDs per day** 和 **Days to cover**，点击 **Apply coverage estimate**，再烘焙。计算保留起始编号，加上预计增长的 20% 余量，并预留分页编号；超出上限会拒绝估算，不会静默截断。
 
 以当前编号 `600000`、每天增长 `30000` 为例，原来的 550000–649999 池只剩约 **1.7 天**。新默认 550000–1749999 预计剩余约 **38.3 天**。点击估算按钮后，按 30 天及 20% 余量得到 **1130003 条**，覆盖 **550000–1680002**，预计剩余约 **36 天**。估算结果与新模块的固定默认数量不同。

@@ -1,4 +1,5 @@
 using System;
+using UdonSharp;
 using UdonSharpEditor;
 using UnityEditor;
 using UnityEngine;
@@ -17,6 +18,39 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     private int _latest = 600000;
     private int _dailyGrowth = 30000;
     private int _days = 30;
+    private const string PendingBake = "BilibiliSearch.PendingBake";
+
+    // UdonSharp caches field layouts for the lifetime of the Unity scripting domain.
+    // Compiling alone cannot repair a layout cached before new fields were added.
+    private static void RequestBake(int start, int count)
+    {
+      if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)
+        throw new InvalidOperationException("Wait for Unity compilation and exit Play mode before baking URLs.");
+      if (!IsRangeValid(start, count)) throw new InvalidOperationException("Invalid direct URL pool range.");
+      UdonSharp.Compiler.UdonSharpCompilerV1.CompileSync();
+      if (UdonSharpProgramAsset.AnyUdonSharpScriptHasError() || EditorUtility.scriptCompilationFailed)
+        throw new InvalidOperationException("Resolve compilation errors before baking URLs.");
+      SessionState.SetInt(PendingBake + ".Start", start);
+      SessionState.SetInt(PendingBake + ".Count", count);
+      SessionState.SetBool(PendingBake, true);
+      Debug.Log("[BilibiliSearch] Refreshing UdonSharp serialization; URL baking will continue automatically after script reload.");
+      EditorUtility.RequestScriptReload();
+    }
+
+    [InitializeOnLoadMethod]
+    private static void ResumeBakeAfterReload()
+    {
+      if (SessionState.GetBool(PendingBake, false)) EditorApplication.update += ContinueBake;
+    }
+
+    private static void ContinueBake()
+    {
+      if (EditorApplication.isCompiling || EditorApplication.isUpdating) return;
+      EditorApplication.update -= ContinueBake;
+      SessionState.SetBool(PendingBake, false);
+      try { BakePrefab(SessionState.GetInt(PendingBake + ".Start", 0), SessionState.GetInt(PendingBake + ".Count", 0)); }
+      catch (Exception exception) { Debug.LogException(exception); }
+    }
 
     [MenuItem("Tools/YamaPlayer/Bilibili Search/Direct Action URLs", priority = 102)]
     public static void Open() { GetWindow<BilibiliSearchDirectSetup>("Direct Action URLs"); }
@@ -67,7 +101,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
         "serialized objects and Udon add overhead. Verify world size, build time and client memory before upload.", MessageType.Warning);
       using (new EditorGUI.DisabledScope(!IsRangeValid(_start, _capacity)))
       {
-        if (GUILayout.Button("Bake module prefab")) BakePrefab(_start, _capacity);
+        if (GUILayout.Button("Bake module prefab")) RequestBake(_start, _capacity);
       }
     }
 
@@ -130,6 +164,12 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     public static void BakePrefab(int start, int count)
     {
       if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("Exit Play mode before baking URLs.");
+      if (!IsRangeValid(start, count)) throw new InvalidOperationException("Invalid direct URL pool range.");
+      if (EditorApplication.isCompiling || EditorUtility.scriptCompilationFailed)
+        throw new InvalidOperationException("Wait for successful Unity compilation before baking URLs.");
+      UdonSharp.Compiler.UdonSharpCompilerV1.CompileSync();
+      if (UdonSharpProgramAsset.AnyUdonSharpScriptHasError())
+        throw new InvalidOperationException("UdonSharp compilation failed; prefab was not changed.");
       var root = PrefabUtility.LoadPrefabContents(ModulePath);
       try
       {
@@ -141,6 +181,12 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
           service.RecordUrlCapacity = count;
           Bake(service);
           UdonSharpEditorUtility.CopyProxyToUdon(service);
+          var backing = UdonSharpEditorUtility.GetBackingUdonBehaviour(service);
+          if (backing == null ||
+              !backing.publicVariables.TryGetVariableValue<int>(nameof(service.RecordUrlStart), out var savedStart) || savedStart != start ||
+              !backing.publicVariables.TryGetVariableValue<int>(nameof(service.RecordUrlCapacity), out var savedCount) || savedCount != count ||
+              !backing.publicVariables.TryGetVariableValue<VRCUrl[]>(nameof(service.RecordUrls), out var savedUrls) || savedUrls == null || savedUrls.Length != count)
+            throw new InvalidOperationException("UdonSharp did not serialize the URL pool. Prefab was not saved. Use the Direct Action URLs window to refresh serialization and retry.");
         }
         UpdateVersion(root);
         PrefabUtility.SaveAsPrefabAsset(root, ModulePath);
