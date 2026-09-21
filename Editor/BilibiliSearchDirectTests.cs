@@ -37,6 +37,9 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       Check(BilibiliSearchDirectSetup.PlanCapacity(1, 1, 0, 30) == 0, "zero growth rejected");
       Check(BilibiliSearchDirectSetup.IsRangeValid(int.MaxValue, 1), "inclusive maximum ID accepted");
       Check(!BilibiliSearchDirectSetup.IsRangeValid(int.MaxValue, 2), "range overflow rejected");
+      Check(BilibiliSearchDirectSetup.ResourceWarningUrlCount == 220000, "resource warning threshold");
+      Check(BilibiliSearchDirectSetup.ResourceWarningUrlCount > 210003, "default pool stays below the warning threshold");
+      Check(BilibiliSearchDirectSetup.ResourceWarningUrlCount < BilibiliSearchService.MaxRecordUrlCapacity, "warning threshold below the hard limit");
       var root = new GameObject("BiliDirectRegression");
       try
       {

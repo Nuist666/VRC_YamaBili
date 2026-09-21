@@ -1,6 +1,6 @@
 # Bilibili 视频搜索模块 —— 开发与排错笔记
 
-> **v1.1.0（2026-09-21）**：关键词结果支持一键翻页、播放和入队。使用前配置有限的记录 URL 池，详见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
+> **v1.1.1（2026-09-21）**：编号池增加容量估算并缩减默认池，修复更新脚本后 Bake 失败的问题。池的配置与限制详见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 > 面向二次开发：文件清单、架构取舍、布局公式、真实踩过的坑、对 YamaPlayer 核心做的改动。
 > 安装、配置与使用请看 [README.md](README.md) 和 [INSTALL.md](INSTALL.md)；
@@ -159,9 +159,9 @@ UIController.Localization.cs(132,49)
   - **添加到待播队列**：加入 YamaPlayer 的播放队列（`Controller.Queue.AddTrack`）。
     加入成功后该条的队列按钮**禁用 10 秒**，防止重复添加。
 - **首次入队也无需粘贴**：与播放共用预置记录地址；保留权限检查、所有权处理和防重复冷却。
-- **版本按钮**：标题右边紧挨着一个小按钮（显示 `v1.1.0`），点开一个版本浮层。浮层仿照
+- **版本按钮**：标题右边紧挨着一个小按钮（显示 `v1.1.1`），点开一个版本浮层。浮层仿照
   YamaPlayer 自己的版本信息页排版：
-  - 顶部**居中**的项目名 + 版本号 `BiliBili Search v1.1.0`（Primary 配色），
+  - 顶部**居中**的项目名 + 版本号 `BiliBili Search v1.1.1`（Primary 配色），
     **竖直分割线的顶端正好接在它下面**；
   - 分割线**左半边**：作者头像在上（320×240，占分割线上半段），下面五行
     （`VRChat / Twitter / Github / DeepSeek / Codex`），第一行与头像之间**空一行**
@@ -186,7 +186,7 @@ UIController.Localization.cs(132,49)
     `Packages/net.kwxxw.yama-stream/Assets/Images/` 取（找不到就按文件名全工程搜一遍）。
   - 头像是模块目录里的 **`Author.png`**（320×240、圆形、四角透明）。工具只会强制它的导入
     设置为 `Sprite` + 保留透明通道，换图直接替换这个文件即可。
-- **面板自己有两个标签页**（就在顶栏里、`v1.1.0` 左边那两个按钮，顺序是
+- **面板自己有两个标签页**（就在顶栏里、`v1.1.1` 左边那两个按钮，顺序是
   `[网址输入] [关键词搜索]`，`BilibiliSearchUI.ShowUrlTab()` / `ShowSearchTab()` 切换
   `UrlTab` / `SearchTab` 两个容器，**默认停在网址输入**：`ShowPanel(true)` 里会调 `ShowUrlTab()`）：
   - **关键词搜索**：搜索框（`_defaultSearchUrl`）+ 结果列表；切到它时会
@@ -269,7 +269,7 @@ BV 用于复制网页链接与结果身份校验，播放和入队使用记录 U
 文字块 `InfoHeight` 140、按钮离底部 36 ↔ 分割线 3 等），改完重新 Generate 一次即可。
 
 > 面板顶栏**没有标题**了（为了省纵向空间删掉了 `TitleText`）：现在是
-> `[网址输入] [关键词搜索] [v1.1.0] 状态文字 … 页码` 一行（默认停在网址输入页）。
+> `[网址输入] [关键词搜索] [v1.1.1] 状态文字 … 页码` 一行（默认停在网址输入页）。
 > `module.bilibilisearch.title` 这个 key 仍留在 `Localization.Runtime.json` / `BiliText.cs` 里，
 > 但面板已经没有任何地方用它（`UpdateTranslation()` 只写标签、状态、按钮和浮层文案）。
 

@@ -28,8 +28,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     /// only list a module the project has a prefab for: dropping Modules/BilibiliSearch into
     /// another project is then enough to make the module available there.
     /// </summary>
-    public const string Version = "1.1.0";
-    public const string Changelog = "v1.1.0\n検索結果のページ切り替え・再生・キュー追加をワンクリックで実行できるようにしました。\n\nv1.0.0\n初回リリース";
+    public const string Version = "1.1.1";
+    public const string Changelog = "v1.1.1\nDirect Action URLs に、URL数の試算機能とリソース使用量の警告を追加しました。\n\nv1.1.0\n検索結果のページ切り替え・再生・キュー追加をワンクリックで実行できるようにしました。\n\nv1.0.0\n初回リリース";
 
     private const string DefaultOutputFolder = "Packages/net.kwxxw.yama-stream/Modules/BilibiliSearch";
     /// <summary>Where the prefabs used to be generated before they moved into the package.</summary>

@@ -19,6 +19,10 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     private int _dailyGrowth = 25000;
     private int _days = 7;
     private const string PendingBake = "BilibiliSearch.PendingBake";
+    /// <summary>Above this count the window warns that resource usage may be too high.</summary>
+    public const int ResourceWarningUrlCount = 220000;
+    /// <summary>Rough UTF-16 character size of six-digit and seven-digit srid URLs, in bytes.</summary>
+    private const long UrlTextBytes = 105L;
 
     // UdonSharp caches field layouts for the lifetime of the Unity scripting domain.
     // Compiling alone cannot repair a layout cached before new fields were added.
@@ -97,12 +101,30 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       if (_dailyGrowth > 0 && _latest >= _start && _latest <= last)
         EditorGUILayout.LabelField("Estimated remaining days", ((last - _latest) / (double)_dailyGrowth).ToString("F1"));
       else EditorGUILayout.HelpBox("Observed ID is outside the pool, or growth is invalid.", MessageType.Warning);
-      EditorGUILayout.HelpBox("At the default 210,003 URLs, text alone is approximately 22 MB for the default endpoint; " +
-        "serialized objects and Udon add overhead. Verify world size, build time and client memory before upload.", MessageType.Warning);
+      if (_capacity > ResourceWarningUrlCount)
+      {
+        EditorGUILayout.HelpBox("URL count " + _capacity.ToString("N0") + " is above the recommended " +
+          ResourceWarningUrlCount.ToString("N0") + " URLs. Resource usage may be too high: text alone is roughly " +
+          UrlTextMegabytes(_capacity) + " MB versus " + UrlTextMegabytes(ResourceWarningUrlCount) + " MB at the recommended limit, " +
+          "and serialized objects, temporary copies, Undo and client memory add more. Raise the coverage only when necessary, " +
+          "and verify world size, build time and memory before upload.", MessageType.Warning);
+      }
+      else
+      {
+        EditorGUILayout.HelpBox("URL count " + _capacity.ToString("N0") + " is within the recommended " +
+          ResourceWarningUrlCount.ToString("N0") + " URLs. Text alone is roughly " + UrlTextMegabytes(_capacity) +
+          " MB; serialized objects, temporary copies and Udon add more.", MessageType.Info);
+      }
       using (new EditorGUI.DisabledScope(!IsRangeValid(_start, _capacity)))
       {
         if (GUILayout.Button("Bake module prefab")) RequestBake(_start, _capacity);
       }
+    }
+
+    /// <summary>Rough UTF-16 text size of the baked pool, for display only.</summary>
+    private static long UrlTextMegabytes(int count)
+    {
+      return Math.Max(1L, (long)count * UrlTextBytes / 1000000L);
     }
 
     public static bool IsRangeValid(int start, int count)

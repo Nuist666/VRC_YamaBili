@@ -1,6 +1,6 @@
 # Bilibili 视频搜索模块（YamaPlayer 扩展）
 
-> **当前版本 v1.1.0（2026-09-21）**：关键词结果支持一键翻页、播放和入队，不再需要复制粘贴；使用前需配置有限的记录 URL 池。更新内容见 [CHANGELOG.md](CHANGELOG.md)，配置与限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
+> **当前版本 v1.1.1（2026-09-21）**：编号池新增容量估算（按最新编号 / 每日增长 / 覆盖天数自动算数量，含 20% 余量），默认池缩减为 `600000`–`810002`，并修复更新脚本后 Bake 失败的问题。更新内容见 [CHANGELOG.md](CHANGELOG.md)，配置与限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 给 [YamaPlayer](https://github.com/koorimizuw/YamaPlayer) 的屏幕 UI 加一个 B 站面板：
 **关键词搜索**结果列表，或者直接**粘贴 B 站链接 / BV 号**播放，支持复制链接与待播队列。
