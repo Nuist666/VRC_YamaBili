@@ -13,13 +13,17 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
   {
     public const string ModulePath = "Packages/net.kwxxw.yama-stream/Modules/BilibiliSearch/BilibiliSearch.prefab";
     private int _start = 550000;
-    private int _capacity = 100000;
+    private int _capacity = 1200000;
+    private int _latest = 600000;
+    private int _dailyGrowth = 30000;
+    private int _days = 30;
 
     [MenuItem("Tools/YamaPlayer/Bilibili Search/Direct Action URLs", priority = 102)]
     public static void Open() { GetWindow<BilibiliSearchDirectSetup>("Direct Action URLs"); }
 
     private void OnEnable()
     {
+      minSize = new Vector2(480f, 340f);
       var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ModulePath);
       var service = prefab == null ? null : prefab.GetComponentInChildren<BilibiliSearchService>(true);
       if (service != null) { _start = service.RecordUrlStart; _capacity = service.RecordUrlCapacity; }
@@ -27,15 +31,61 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
 
     private void OnGUI()
     {
+      float previousLabelWidth = EditorGUIUtility.labelWidth;
+      try
+      {
+        // IMGUI's default label width clips these labels even in a wide window.
+        EditorGUIUtility.labelWidth = Mathf.Max(230f,
+          EditorStyles.label.CalcSize(new GUIContent("Days to cover (+20% reserve)")).x + 16f,
+          EditorStyles.label.CalcSize(new GUIContent("URL count (max 2,000,000)")).x + 16f);
+        DrawSettings();
+      }
+      finally { EditorGUIUtility.labelWidth = previousLabelWidth; }
+    }
+
+    private void DrawSettings()
+    {
       EditorGUILayout.HelpBox("Bake complete ?srid= URLs for direct page/play/queue buttons. " +
         "IDs outside this range cannot be generated at runtime. Update the range and upload the world again when needed. " +
-        "100,000 URLs contain about 10.2 MB of UTF-16 text before object and Udon overhead.", MessageType.Info);
+        "Coverage is an estimate based on observed growth, not a guarantee.", MessageType.Info);
+      _latest = EditorGUILayout.IntField("Latest observed record ID", _latest);
+      _dailyGrowth = EditorGUILayout.IntField("Estimated IDs per day", _dailyGrowth);
+      _days = EditorGUILayout.IntField("Days to cover (+20% reserve)", _days);
+      int plannedCount = PlanCapacity(_start, _latest, _dailyGrowth, _days);
+      using (new EditorGUI.DisabledScope(plannedCount == 0))
+        if (GUILayout.Button("Apply coverage estimate")) _capacity = plannedCount;
+      if (plannedCount == 0)
+        EditorGUILayout.HelpBox("Invalid estimate or more than 2,000,000 URLs required. Adjust the first ID or coverage inputs.", MessageType.Warning);
       _start = EditorGUILayout.IntField("First record ID", _start);
-      _capacity = EditorGUILayout.IntField("URL count (max 200,000)", _capacity);
-      using (new EditorGUI.DisabledScope(_start < 1 || _capacity < 1 || _capacity > 200000 || (long)_start + _capacity > int.MaxValue))
+      _capacity = EditorGUILayout.IntField("URL count (max 2,000,000)", _capacity);
+      long last = (long)_start + _capacity - 1;
+      EditorGUILayout.LabelField("Last record ID", last.ToString());
+      if (_dailyGrowth > 0 && _latest >= _start && _latest <= last)
+        EditorGUILayout.LabelField("Estimated remaining days", ((last - _latest) / (double)_dailyGrowth).ToString("F1"));
+      else EditorGUILayout.HelpBox("Observed ID is outside the pool, or growth is invalid.", MessageType.Warning);
+      EditorGUILayout.HelpBox("At 1,200,000 URLs, text alone is approximately 122 MB for the default endpoint; " +
+        "serialized objects and Udon add overhead. Verify world size, build time and client memory before upload.", MessageType.Warning);
+      using (new EditorGUI.DisabledScope(!IsRangeValid(_start, _capacity)))
       {
         if (GUILayout.Button("Bake module prefab")) BakePrefab(_start, _capacity);
       }
+    }
+
+    public static bool IsRangeValid(int start, int count)
+    {
+      return start > 0 && count > 0 && count <= BilibiliSearchService.MaxRecordUrlCapacity &&
+        (long)start + count - 1 <= int.MaxValue;
+    }
+
+    // Include the current ID and both pagination records; keep older configured IDs usable.
+    public static int PlanCapacity(int start, int latest, int dailyGrowth, int days)
+    {
+      if (start < 1 || latest < start || dailyGrowth < 1 || days < 1) return 0;
+      decimal growth = decimal.Ceiling((decimal)dailyGrowth * days * 1.2m);
+      decimal count = latest - (decimal)start + growth + 3;
+      if (count > BilibiliSearchService.MaxRecordUrlCapacity) return 0;
+      int planned = (int)count;
+      return IsRangeValid(start, planned) ? planned : 0;
     }
 
     public static void Bake(BilibiliSearchService service)
@@ -45,7 +95,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
           !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
         throw new InvalidOperationException("BilibiliSearch: Base URL must be an HTTPS endpoint without query or fragment.");
       int count = service.RecordUrlCapacity;
-      if (service.RecordUrlStart < 1 || count < 1 || count > 200000 || (long)service.RecordUrlStart + count > int.MaxValue)
+      if (!IsRangeValid(service.RecordUrlStart, count))
         throw new InvalidOperationException("BilibiliSearch: invalid direct URL pool range.");
       var urls = new VRCUrl[count];
       for (int i = 0; i < count; i++) urls[i] = new VRCUrl(root + "?srid=" + (service.RecordUrlStart + i));
@@ -55,6 +105,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
 
     public static bool IsPoolValid(BilibiliSearchService service)
     {
+      if (!IsRangeValid(service.RecordUrlStart, service.RecordUrlCapacity)) return false;
       if (service.RecordUrls == null || service.RecordUrls.Length != service.RecordUrlCapacity || service.RecordUrls.Length == 0) return false;
       for (int i = 0; i < service.RecordUrls.Length; i++)
       {

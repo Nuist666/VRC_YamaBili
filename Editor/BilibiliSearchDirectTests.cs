@@ -30,6 +30,13 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     public static int RunChecks()
     {
       _assertions = 0;
+      Check(BilibiliSearchDirectSetup.PlanCapacity(550000, 580000, 30000, 30) == 1110003, "30 days plus reserve and pagination");
+      Check(BilibiliSearchDirectSetup.PlanCapacity(550000, 580000, 30000, 90) == 0, "oversized plan rejected without truncation");
+      Check(BilibiliSearchDirectSetup.PlanCapacity(550000, 549999, 30000, 30) == 0, "observed ID below start rejected");
+      Check(BilibiliSearchDirectSetup.PlanCapacity(1, 1, int.MaxValue, int.MaxValue) == 0, "planner arithmetic does not overflow");
+      Check(BilibiliSearchDirectSetup.PlanCapacity(1, 1, 0, 30) == 0, "zero growth rejected");
+      Check(BilibiliSearchDirectSetup.IsRangeValid(int.MaxValue, 1), "inclusive maximum ID accepted");
+      Check(!BilibiliSearchDirectSetup.IsRangeValid(int.MaxValue, 2), "range overflow rejected");
       var root = new GameObject("BiliDirectRegression");
       try
       {

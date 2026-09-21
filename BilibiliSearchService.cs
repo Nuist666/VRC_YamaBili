@@ -27,7 +27,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch
 
     [Header("Direct actions - bake URLs before uploading")]
     [Min(1)] public int RecordUrlStart = 550000;
-    [Range(1, 200000)] public int RecordUrlCapacity = 100000;
+    public const int MaxRecordUrlCapacity = 2000000;
+    [Range(1, MaxRecordUrlCapacity)] public int RecordUrlCapacity = 1200000;
     [HideInInspector] public VRCUrl[] RecordUrls = new VRCUrl[0];
     private VRCUrl _lastSuccessfulRequest;
     private VRCUrl _returnPageRequest;

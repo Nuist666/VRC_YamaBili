@@ -252,7 +252,7 @@ BV 用于复制网页链接与结果身份校验，播放和入队使用记录 U
 | --- | --- |
 | `_baseUrl` | 接口前缀，由生成工具填入你在 setup 窗口里配置的地址（仓库里没有默认域名） |
 | `_maxResults` | 每页最多显示多少条 |
-| `RecordUrlStart` / `RecordUrlCapacity` | 编辑器生成记录 URL 池的起点和数量；默认 550000 / 100000 |
+| `RecordUrlStart` / `RecordUrlCapacity` | 编辑器生成记录 URL 池的起点和数量；默认 550000 / 1200000 |
 | `RecordUrls` | 完整地址数组，只在编辑器烘焙，运行时按编号查表 |
 
 面板 prefab 根节点上的 `BilibiliSearchUI` 还有几个和 URL 有关的字段：
