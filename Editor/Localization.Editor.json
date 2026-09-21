@@ -1,0 +1,38 @@
+{
+  "ja": {
+    "module.bilibilisearch.name": "Bilibili検索",
+    "module.bilibilisearch.description": "Bilibiliの動画をキーワードで検索し、再生・キュー追加ができるようにします。"
+  },
+  "en": {
+    "module.bilibilisearch.name": "Bilibili Search",
+    "module.bilibilisearch.description": "Search bilibili videos by keyword, then play them or add them to the queue."
+  },
+  "ko": {
+    "module.bilibilisearch.name": "빌리빌리 검색",
+    "module.bilibilisearch.description": "키워드로 빌리빌리 동영상을 검색하고 재생하거나 대기열에 추가합니다."
+  },
+  "zh-CN": {
+    "module.bilibilisearch.name": "B站视频搜索",
+    "module.bilibilisearch.description": "按关键词搜索B站视频，可直接播放或添加到播放队列。"
+  },
+  "zh-HK": {
+    "module.bilibilisearch.name": "B站影片搜尋",
+    "module.bilibilisearch.description": "按關鍵字搜尋B站影片，可直接播放或加入播放佇列。"
+  },
+  "ru": {
+    "module.bilibilisearch.name": "Поиск Bilibili",
+    "module.bilibilisearch.description": "Поиск видео на bilibili по ключевому слову с возможностью воспроизведения и добавления в очередь."
+  },
+  "uk": {
+    "module.bilibilisearch.name": "Пошук Bilibili",
+    "module.bilibilisearch.description": "Пошук відео на bilibili за ключовим словом із можливістю відтворення та додавання до черги."
+  },
+  "es": {
+    "module.bilibilisearch.name": "Búsqueda de Bilibili",
+    "module.bilibilisearch.description": "Busca videos de bilibili por palabra clave, reprodúcelos o añádelos a la cola."
+  },
+  "it": {
+    "module.bilibilisearch.name": "Ricerca Bilibili",
+    "module.bilibilisearch.description": "Cerca video di bilibili per parola chiave, riproducili o aggiungili alla coda."
+  }
+}
