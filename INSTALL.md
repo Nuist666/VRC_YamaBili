@@ -1,6 +1,6 @@
 # 安装与配置（BiliBili Search for YamaPlayer）
 
-> **当前版本 v1.1.2（2026-09-21）**：编号池配置并入 **Bilibili Search Setup**（Base URL 下方），设置好后一次 **Generate Prefabs** 生成面板、模块与完整的 `?srid=` 地址池；默认池 `500000`–`542002`（42003 条），推荐上限 `50000`。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
+> **当前版本 v1.1.2（2026-09-22）**：编号池配置并入 **Bilibili Search Setup**（Base URL 下方），设置好后一次 **Generate Prefabs** 生成面板、模块与完整的 `?srid=` 地址池；默认池 `500000`–`542002`（42003 条），推荐上限 `50000`。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
 
 在 YamaPlayer 的屏幕上加一个 B 站视频搜索面板：搜关键词 → 从列表里挑一条 →
 **复制链接 / 播放 / 加入待播队列**，支持翻页。

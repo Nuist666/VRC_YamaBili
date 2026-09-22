@@ -1,6 +1,6 @@
 # Bilibili 视频搜索模块（YamaPlayer 扩展）
 
-> **当前版本 v1.1.2（2026-09-21）**：编号池配置并入 **Bilibili Search Setup**（Base URL 下方），填好后一次 **Generate Prefabs** 连面板、模块与 `?srid=` 地址池一起生成；默认池为 `500000`–`542002`（42003 条），推荐上限 `50000`。更新内容见 [CHANGELOG.md](CHANGELOG.md)，配置与限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
+> **当前版本 v1.1.2（2026-09-22）**：编号池配置并入 **Bilibili Search Setup**（Base URL 下方），填好后一次 **Generate Prefabs** 连面板、模块与 `?srid=` 地址池一起生成；默认池为 `500000`–`542002`（42003 条），推荐上限 `50000`。更新内容见 [CHANGELOG.md](CHANGELOG.md)，配置与限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 给 [YamaPlayer](https://github.com/koorimizuw/YamaPlayer) 的屏幕 UI 加一个 B 站面板：
 **关键词搜索**结果列表，或者直接**粘贴 B 站链接 / BV 号**播放，支持复制链接与待播队列。
