@@ -5,6 +5,40 @@
 
 ---
 
+## v1.1.2（2026-09-21）
+
+主题：**把编号池配置并入 Bilibili Search Setup，并再次缩减默认池**。搜索面板的运行时行为不变，改动集中在编辑器工具。
+
+### 一次生成到底
+
+- **Direct Action URLs 的全部配置并入 `Bilibili Search Setup`**，接在 **Base URL** 下方：最新观测编号、每日增长、覆盖天数、`Apply coverage estimate`、起点、URL 数量、末编号、预计剩余天数与资源占用提示。填好后直接点 **Generate Prefabs**，面板 prefab、模块 prefab 与完整 `?srid=` 地址池一次生成。
+- **移除独立的 Direct Action URLs 窗口与菜单项**。它原先只做「烘池 + 更新版本文字」，功能已并入生成流程；已有模块换池同样是改 Setup 里的起点与数量后重新 **Generate Prefabs**（prefab 覆盖保存、保留 GUID，场景实例沿用新池）。
+- 池的设置（起点、数量、估算三项）保存在 `EditorPrefs`，与 Base URL 同一命名空间。因此不开窗口的菜单项 **Bilibili Search / Generate Prefabs** 也会用同一份数值；换机器或换工程需要重新填写。
+- 池范围无效时（起点非正、数量越界、末编号溢出）**Generate Prefabs 按钮置灰**并显示提示；菜单项路径直接报错返回，不会生成半成品。
+- 保存模块 prefab 前会校验起点、数量与 `VRCUrl[]` 确实写入了 Udon，校验失败即中止保存并抛错（原先只在独立窗口的烘焙路径里校验）。
+- 设置窗口加入滚动视图并放宽最小尺寸，字段变多后不会把 Generate 按钮挤出可视区域。
+
+### 默认池与推荐上限
+
+- **默认池缩减为 `500000`–`542002`**（起始 500000、数量 42003）：按每日 5000 条、覆盖 7 天加 20% 余量估算约覆盖 **8.4 天**，适合每周更新一次地图。实测以 210003 条的旧默认池做初次构建时，Unity Editor 占用内存由约 **2931 MB 升至 6219 MB**，因此再缩减一级；上限仍是 **200 万条**。
+- **推荐上限降为 `50000`**：超过即显示资源占用警告（按 105 字节/条对比，约 5 MB），未超过时显示中性的体积提示。
+
+### 编辑器工具
+
+- 回归断言改为校验**出厂默认常量**（起点 500000、数量 42003、估算 500000/5000/7）与文档算例一致，并把「默认池低于推荐上限」改为引用默认常量，避免文档和代码再次走偏。
+
+### 版本与文案
+
+- 模块定义版本、顶栏版本按钮、版本浮层标题与更新履历统一为 `v1.1.2`。面板浮层里的日语履历按惯例只写一句话：
+  `Direct Action URLs の設定を Bilibili Search Setup に統合し、Generate Prefabs で URL プールまでまとめて生成できるようにしました。`
+- README / INSTALL / DIRECT_ACTIONS / DEVELOPMENT / BACKEND / LICENSE / NOTICE 已同步为新入口、新默认值与新菜单结构。
+- 许可与署名条款**未变更**（见 [LICENSE.md](LICENSE.md) / [NOTICE.md](NOTICE.md)）。
+- **本次未做 Unity / VRChat 端到端验收**：改动全部在编辑器工具与文档，发布前请运行 **Run Direct Action Regression Tests**、完成 Udon Editor / World 编译，并在 ClientSim 或客户端确认翻页、播放、入队仍走新池。
+
+### 升级提示
+
+已有模块的池不会自动变化。要换成新的默认池：打开 **Tools → YamaPlayer → Bilibili Search Setup**，在 Direct Action URLs 一栏填写起点 `500000`、数量 `42003`（或按当次观测点 **Apply coverage estimate**），点 **Generate Prefabs**，再重新构建并上传世界。
+
 ## v1.1.1（2026-09-21）
 
 主题：**编号池的容量规划与缩容**，并修掉烘焙时的 UdonSharp 序列化缓存问题。搜索面板本身的行为不变。
@@ -36,7 +70,7 @@
 
 ### 升级提示
 
-编号池的默认值变化不会影响已发布的模块：升级后按 **[DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)** 重新观测后端编号、点击 **Apply coverage estimate**、再 **Bake module prefab**，然后重新构建并上传世界。
+编号池的默认值变化不会影响已发布的模块：重新观测后端编号、重算数量并重新烘焙，然后重新构建并上传世界，步骤见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)（v1.1.2 起这些设置已并入 **Bilibili Search Setup** 窗口）。
 
 ## v1.1.0（2026-09-21）
 

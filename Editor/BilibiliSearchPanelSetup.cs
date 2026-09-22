@@ -28,8 +28,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     /// only list a module the project has a prefab for: dropping Modules/BilibiliSearch into
     /// another project is then enough to make the module available there.
     /// </summary>
-    public const string Version = "1.1.1";
-    public const string Changelog = "v1.1.1\nDirect Action URLs に、URL数の試算機能とリソース使用量の警告を追加しました。\n\nv1.1.0\n検索結果のページ切り替え・再生・キュー追加をワンクリックで実行できるようにしました。\n\nv1.0.0\n初回リリース";
+    public const string Version = "1.1.2";
+    public const string Changelog = "v1.1.2\nDirect Action URLs の設定を Bilibili Search Setup に統合し、Generate Prefabs で URL プールまでまとめて生成できるようにしました。\n\nv1.1.1\nDirect Action URLs に、URL数の試算機能とリソース使用量の警告を追加しました。\n\nv1.1.0\n検索結果のページ切り替え・再生・キュー追加をワンクリックで実行できるようにしました。\n\nv1.0.0\n初回リリース";
 
     private const string DefaultOutputFolder = "Packages/net.kwxxw.yama-stream/Modules/BilibiliSearch";
     /// <summary>Where the prefabs used to be generated before they moved into the package.</summary>
@@ -102,6 +102,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     private string _targetPath = DefaultTargetPath;
     private int _siblingIndex = -1;
     private bool _instantiateInScene = true;
+    /// <summary>Scroll offset of the setup window, which now also holds the record pool settings.</summary>
+    private Vector2 _scroll;
     private static Font _cachedFont;
     private static Sprite _cachedIcon;
     private static Sprite _cachedFrame;
@@ -549,61 +551,76 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     public static void Open()
     {
       var window = GetWindow<BilibiliSearchPanelSetup>(true, "Bilibili Search Setup");
-      window.minSize = new Vector2(460f, 220f);
+      window.minSize = new Vector2(480f, 320f);
       window.Show();
     }
 
     private void OnGUI()
     {
-      EditorGUILayout.LabelField("Bilibili Search", EditorStyles.boldLabel);
-      EditorGUILayout.HelpBox(
-        "Creates a search panel prefab and a module prefab, then optionally places it in the open scene.\n" +
-        "The module is injected into the YamaPlayer UI at build time through the path below.",
-        MessageType.Info);
-
-      _outputFolder = EditorGUILayout.TextField("Output Folder", _outputFolder);
-      _targetPath = EditorGUILayout.TextField("Target Path", _targetPath);
-      _siblingIndex = EditorGUILayout.IntField("Sibling Index (-1 = last)", _siblingIndex);
-      _instantiateInScene = EditorGUILayout.Toggle("Place In Current Scene", _instantiateInScene);
-
-      EditorGUILayout.Space();
-      EditorGUILayout.LabelField("Backend", EditorStyles.boldLabel);
-      BackendBase = EditorGUILayout.TextField("Base URL", BackendBase);
-
-      if (BackendConfigured)
+      // The record pool settings moved into this window, so the content can be taller than a
+      // small docked window: keep everything reachable instead of clipping the button.
+      _scroll = EditorGUILayout.BeginScrollView(_scroll);
+      try
       {
+        EditorGUILayout.LabelField("Bilibili Search", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-          "The panel is pre-filled with:\n" +
-          SearchUrl + "\n" + PlayUrl, MessageType.None);
-      }
-      else
-      {
-        EditorGUILayout.HelpBox(
-          "Enter the address of your own bilibili player backend, for example\n" +
-          "  https://bili.example.com/player/\n" +
-          "This package ships no server: the search box and the playback url are built from the " +
-          "address above. See Modules/BilibiliSearch/BACKEND.md for the endpoints the server has " +
-          "to provide.", MessageType.Warning);
-      }
+          "Creates a search panel prefab and a module prefab, then optionally places it in the open scene.\n" +
+          "The module is injected into the YamaPlayer UI at build time through the path below.",
+          MessageType.Info);
 
-      EditorGUILayout.Space();
-      EditorGUILayout.HelpBox(
-        "The panel has two tabs:\n" +
-        "  • keyword search, pre-filled with " + SearchUrl + "\n" +
-        "  • url input, pre-filled with " + PlayUrl + "\n" +
-        "The url tab resets its box to that prefix on every click, so the player only appends the " +
-        "bilibili link. YamaPlayer's own url input is left untouched - it stays available for other " +
-        "sites (YouTube and friends).", MessageType.None);
+        _outputFolder = EditorGUILayout.TextField("Output Folder", _outputFolder);
+        _targetPath = EditorGUILayout.TextField("Target Path", _targetPath);
+        _siblingIndex = EditorGUILayout.IntField("Sibling Index (-1 = last)", _siblingIndex);
+        _instantiateInScene = EditorGUILayout.Toggle("Place In Current Scene", _instantiateInScene);
 
-      EditorGUILayout.Space();
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Backend", EditorStyles.boldLabel);
+        BackendBase = EditorGUILayout.TextField("Base URL", BackendBase);
 
-      using (new EditorGUI.DisabledScope(!BackendConfigured))
-      {
-        if (GUILayout.Button("Generate Prefabs", GUILayout.Height(32f)))
+        if (BackendConfigured)
         {
-          Generate();
+          EditorGUILayout.HelpBox(
+            "The panel is pre-filled with:\n" +
+            SearchUrl + "\n" + PlayUrl, MessageType.None);
+        }
+        else
+        {
+          EditorGUILayout.HelpBox(
+            "Enter the address of your own bilibili player backend, for example\n" +
+            "  https://bili.example.com/player/\n" +
+            "This package ships no server: the search box and the playback url are built from the " +
+            "address above. See Modules/BilibiliSearch/BACKEND.md for the endpoints the server has " +
+            "to provide.", MessageType.Warning);
+        }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Direct Action URLs", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+          "Bake complete ?srid= URLs for direct page/play/queue buttons. " +
+          "IDs outside this range cannot be generated at runtime. Update the range and upload the world again when needed. " +
+          "Coverage is an estimate based on observed growth, not a guarantee.", MessageType.Info);
+        bool poolValid = BilibiliSearchDirectSetup.DrawSettings();
+
+        EditorGUILayout.Space();
+        EditorGUILayout.HelpBox(
+          "The panel has two tabs:\n" +
+          "  • keyword search, pre-filled with " + SearchUrl + "\n" +
+          "  • url input, pre-filled with " + PlayUrl + "\n" +
+          "The url tab resets its box to that prefix on every click, so the player only appends the " +
+          "bilibili link. YamaPlayer's own url input is left untouched - it stays available for other " +
+          "sites (YouTube and friends).", MessageType.None);
+
+        EditorGUILayout.Space();
+
+        using (new EditorGUI.DisabledScope(!BackendConfigured || !poolValid))
+        {
+          if (GUILayout.Button("Generate Prefabs", GUILayout.Height(32f)))
+          {
+            Generate();
+          }
         }
       }
+      finally { EditorGUILayout.EndScrollView(); }
     }
 
     [MenuItem("Tools/YamaPlayer/Bilibili Search/Generate Prefabs", priority = 101)]
@@ -657,6 +674,16 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
           "and enter the address of your own bilibili player backend (for example " +
           "https://bili.example.com/player/). This package ships no server of its own; " +
           "Modules/BilibiliSearch/BACKEND.md describes what the server has to provide.");
+        return;
+      }
+
+      if (!BilibiliSearchDirectSetup.IsRangeValid(BilibiliSearchDirectSetup.ConfiguredStart, BilibiliSearchDirectSetup.ConfiguredCapacity))
+      {
+        Debug.LogError(
+          "[BilibiliSearch] Invalid direct action URL pool: first record ID " +
+          BilibiliSearchDirectSetup.ConfiguredStart + ", count " + BilibiliSearchDirectSetup.ConfiguredCapacity +
+          ". Open Tools > YamaPlayer > Bilibili Search Setup and fix the Direct Action URLs section " +
+          "(positive first ID, count between 1 and " + BilibiliSearchService.MaxRecordUrlCapacity + ").");
         return;
       }
 
@@ -768,6 +795,9 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       {
         moduleInstance = BuildModule(panelPrefab);
         SyncProxiesToUdon(moduleInstance);
+        // The pool is now the only source of direct action URLs; refuse to save a module whose
+        // URL array did not reach Udon, instead of shipping a panel whose buttons never work.
+        BilibiliSearchDirectSetup.VerifySerializedPool(moduleInstance);
         modulePrefab = SaveFreshPrefab(moduleInstance, modulePath);
       }
       finally { DiscardTemporary(moduleInstance); }
@@ -785,7 +815,10 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       // otherwise it keeps showing "module.bilibilisearch.name" until the next domain reload.
       EditorLocalization.ReloadTranslations();
 
-      Debug.Log($"[BilibiliSearch] Generated {panelPath} and {modulePath}.");
+      Debug.Log($"[BilibiliSearch] Generated {panelPath} and {modulePath} with " +
+        $"{BilibiliSearchDirectSetup.ConfiguredCapacity} direct URLs " +
+        $"({BilibiliSearchDirectSetup.ConfiguredStart} through " +
+        $"{(long)BilibiliSearchDirectSetup.ConfiguredStart + BilibiliSearchDirectSetup.ConfiguredCapacity - 1}).");
 
       if (_instantiateInScene)
       {
@@ -1046,6 +1079,10 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
         else Debug.LogWarning("[BilibiliSearch] Could not pre-fill the base url; set it manually on the Service component.");
       }
       serviceSerialized.ApplyModifiedPropertiesWithoutUndo();
+      // The pool range is configured in this window, right below Base URL, so a single
+      // Generate Prefabs produces the panel, the module and the complete ?srid= URL pool.
+      service.RecordUrlStart = BilibiliSearchDirectSetup.ConfiguredStart;
+      service.RecordUrlCapacity = BilibiliSearchDirectSetup.ConfiguredCapacity;
       BilibiliSearchDirectSetup.Bake(service);
 
       var resultHost = new GameObject("SearchResult");

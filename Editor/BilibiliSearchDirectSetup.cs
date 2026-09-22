@@ -3,71 +3,99 @@ using UdonSharp;
 using UdonSharpEditor;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.UI;
 using VRC.SDKBase;
 using Yamadev.YamaStream.Editor;
 
 namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
 {
-  /// <summary>Authors the finite record URL pool outside Udon runtime.</summary>
-  public class BilibiliSearchDirectSetup : EditorWindow
+  /// <summary>
+  /// Authors the finite record URL pool outside Udon runtime.
+  /// </summary>
+  /// <remarks>
+  /// The range is configured in the Bilibili Search Setup window, directly below Base URL, and is
+  /// remembered in EditorPrefs next to the backend address. "Generate Prefabs" therefore bakes the
+  /// pool the window shows, and the window-less menu action generates the same pool. There is no
+  /// separate Direct Action URLs window any more.
+  /// </remarks>
+  public static class BilibiliSearchDirectSetup
   {
-    public const string ModulePath = "Packages/net.kwxxw.yama-stream/Modules/BilibiliSearch/BilibiliSearch.prefab";
-    private int _start = 600000;
-    private int _capacity = 210003;
-    private int _latest = 600000;
-    private int _dailyGrowth = 25000;
-    private int _days = 7;
-    private const string PendingBake = "BilibiliSearch.PendingBake";
-    /// <summary>Above this count the window warns that resource usage may be too high.</summary>
-    public const int ResourceWarningUrlCount = 220000;
+    /// <summary>Shipped pool defaults, i.e. 500000 through 542002 at the default estimate.</summary>
+    public const int DefaultStart = 500000;
+    public const int DefaultCapacity = 42003;
+    public const int DefaultLatest = 500000;
+    public const int DefaultDailyGrowth = 5000;
+    public const int DefaultDays = 7;
+
+    /// <summary>Above this count the setup window warns that resource usage may be too high.</summary>
+    public const int ResourceWarningUrlCount = 50000;
     /// <summary>Rough UTF-16 character size of six-digit and seven-digit srid URLs, in bytes.</summary>
     private const long UrlTextBytes = 105L;
 
-    // UdonSharp caches field layouts for the lifetime of the Unity scripting domain.
-    // Compiling alone cannot repair a layout cached before new fields were added.
-    private static void RequestBake(int start, int count)
+    private const string StartPrefKey = "Yamadev.YamaStream.BilibiliSearch.RecordUrlStart";
+    private const string CapacityPrefKey = "Yamadev.YamaStream.BilibiliSearch.RecordUrlCapacity";
+    private const string LatestPrefKey = "Yamadev.YamaStream.BilibiliSearch.LatestObservedRecordId";
+    private const string GrowthPrefKey = "Yamadev.YamaStream.BilibiliSearch.EstimatedIdsPerDay";
+    private const string DaysPrefKey = "Yamadev.YamaStream.BilibiliSearch.DaysToCover";
+
+    private static bool _loaded;
+    private static int _start;
+    private static int _capacity;
+    private static int _latest;
+    private static int _dailyGrowth;
+    private static int _days;
+
+    /// <summary>Reads the remembered pool settings once per scripting domain.</summary>
+    private static void EnsureLoaded()
     {
-      if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)
-        throw new InvalidOperationException("Wait for Unity compilation and exit Play mode before baking URLs.");
-      if (!IsRangeValid(start, count)) throw new InvalidOperationException("Invalid direct URL pool range.");
-      UdonSharp.Compiler.UdonSharpCompilerV1.CompileSync();
-      if (UdonSharpProgramAsset.AnyUdonSharpScriptHasError() || EditorUtility.scriptCompilationFailed)
-        throw new InvalidOperationException("Resolve compilation errors before baking URLs.");
-      SessionState.SetInt(PendingBake + ".Start", start);
-      SessionState.SetInt(PendingBake + ".Count", count);
-      SessionState.SetBool(PendingBake, true);
-      Debug.Log("[BilibiliSearch] Refreshing UdonSharp serialization; URL baking will continue automatically after script reload.");
-      EditorUtility.RequestScriptReload();
+      if (_loaded) return;
+      _loaded = true;
+      _start = EditorPrefs.GetInt(StartPrefKey, DefaultStart);
+      _capacity = EditorPrefs.GetInt(CapacityPrefKey, DefaultCapacity);
+      _latest = EditorPrefs.GetInt(LatestPrefKey, DefaultLatest);
+      _dailyGrowth = EditorPrefs.GetInt(GrowthPrefKey, DefaultDailyGrowth);
+      _days = EditorPrefs.GetInt(DaysPrefKey, DefaultDays);
     }
 
-    [InitializeOnLoadMethod]
-    private static void ResumeBakeAfterReload()
+    /// <summary>Lowest record id of the pool the tool bakes; also the pool origin at runtime.</summary>
+    public static int ConfiguredStart
     {
-      if (SessionState.GetBool(PendingBake, false)) EditorApplication.update += ContinueBake;
+      get { EnsureLoaded(); return _start; }
+      set { EnsureLoaded(); _start = value; EditorPrefs.SetInt(StartPrefKey, value); }
     }
 
-    private static void ContinueBake()
+    /// <summary>Amount of record URLs the tool bakes.</summary>
+    public static int ConfiguredCapacity
     {
-      if (EditorApplication.isCompiling || EditorApplication.isUpdating) return;
-      EditorApplication.update -= ContinueBake;
-      SessionState.SetBool(PendingBake, false);
-      try { BakePrefab(SessionState.GetInt(PendingBake + ".Start", 0), SessionState.GetInt(PendingBake + ".Count", 0)); }
-      catch (Exception exception) { Debug.LogException(exception); }
+      get { EnsureLoaded(); return _capacity; }
+      set { EnsureLoaded(); _capacity = value; EditorPrefs.SetInt(CapacityPrefKey, value); }
     }
 
-    [MenuItem("Tools/YamaPlayer/Bilibili Search/Direct Action URLs", priority = 102)]
-    public static void Open() { GetWindow<BilibiliSearchDirectSetup>("Direct Action URLs"); }
-
-    private void OnEnable()
+    /// <summary>Latest record id observed in a backend response; used for the estimate only.</summary>
+    public static int ConfiguredLatest
     {
-      minSize = new Vector2(480f, 340f);
-      var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ModulePath);
-      var service = prefab == null ? null : prefab.GetComponentInChildren<BilibiliSearchService>(true);
-      if (service != null) { _start = service.RecordUrlStart; _capacity = service.RecordUrlCapacity; }
+      get { EnsureLoaded(); return _latest; }
+      set { EnsureLoaded(); _latest = value; EditorPrefs.SetInt(LatestPrefKey, value); }
     }
 
-    private void OnGUI()
+    /// <summary>Estimated amount of new record ids per day; used for the estimate only.</summary>
+    public static int ConfiguredDailyGrowth
+    {
+      get { EnsureLoaded(); return _dailyGrowth; }
+      set { EnsureLoaded(); _dailyGrowth = value; EditorPrefs.SetInt(GrowthPrefKey, value); }
+    }
+
+    /// <summary>Days the pool should cover before the map is updated again.</summary>
+    public static int ConfiguredDays
+    {
+      get { EnsureLoaded(); return _days; }
+      set { EnsureLoaded(); _days = value; EditorPrefs.SetInt(DaysPrefKey, value); }
+    }
+
+    /// <summary>
+    /// Draws the pool settings and persists every change to EditorPrefs.
+    /// </summary>
+    /// <returns>True while the configured range can be baked.</returns>
+    public static bool DrawSettings()
     {
       float previousLabelWidth = EditorGUIUtility.labelWidth;
       try
@@ -76,49 +104,49 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
         EditorGUIUtility.labelWidth = Mathf.Max(230f,
           EditorStyles.label.CalcSize(new GUIContent("Days to cover (+20% reserve)")).x + 16f,
           EditorStyles.label.CalcSize(new GUIContent("URL count (max 2,000,000)")).x + 16f);
-        DrawSettings();
+
+        int latest = EditorGUILayout.IntField("Latest observed record ID", ConfiguredLatest);
+        if (latest != ConfiguredLatest) ConfiguredLatest = latest;
+        int dailyGrowth = EditorGUILayout.IntField("Estimated IDs per day", ConfiguredDailyGrowth);
+        if (dailyGrowth != ConfiguredDailyGrowth) ConfiguredDailyGrowth = dailyGrowth;
+        int days = EditorGUILayout.IntField("Days to cover (+20% reserve)", ConfiguredDays);
+        if (days != ConfiguredDays) ConfiguredDays = days;
+
+        int plannedCount = PlanCapacity(ConfiguredStart, latest, dailyGrowth, days);
+        using (new EditorGUI.DisabledScope(plannedCount == 0))
+          if (GUILayout.Button("Apply coverage estimate")) ConfiguredCapacity = plannedCount;
+        if (plannedCount == 0)
+          EditorGUILayout.HelpBox("Invalid estimate or more than 2,000,000 URLs required. Adjust the first ID or coverage inputs.", MessageType.Warning);
+
+        int start = EditorGUILayout.IntField("First record ID", ConfiguredStart);
+        if (start != ConfiguredStart) ConfiguredStart = start;
+        int capacity = EditorGUILayout.IntField("URL count (max 2,000,000)", ConfiguredCapacity);
+        if (capacity != ConfiguredCapacity) ConfiguredCapacity = capacity;
+
+        long last = (long)ConfiguredStart + ConfiguredCapacity - 1;
+        bool rangeValid = IsRangeValid(ConfiguredStart, ConfiguredCapacity);
+        EditorGUILayout.LabelField("Last record ID", rangeValid ? last.ToString() : "-");
+        if (ConfiguredDailyGrowth > 0 && ConfiguredLatest >= ConfiguredStart && ConfiguredLatest <= last)
+          EditorGUILayout.LabelField("Estimated remaining days", ((last - ConfiguredLatest) / (double)ConfiguredDailyGrowth).ToString("F1"));
+        else EditorGUILayout.HelpBox("Observed ID is outside the pool, or growth is invalid.", MessageType.Warning);
+
+        if (ConfiguredCapacity > ResourceWarningUrlCount)
+        {
+          EditorGUILayout.HelpBox("URL count " + ConfiguredCapacity.ToString("N0") + " is above the recommended " +
+            ResourceWarningUrlCount.ToString("N0") + " URLs. Resource usage may be too high: text alone is roughly " +
+            UrlTextMegabytes(ConfiguredCapacity) + " MB versus " + UrlTextMegabytes(ResourceWarningUrlCount) + " MB at the recommended limit, " +
+            "and serialized objects, temporary copies, Undo and client memory add more. Raise the coverage only when necessary, " +
+            "and verify world size, build time and memory before upload.", MessageType.Warning);
+        }
+        else
+        {
+          EditorGUILayout.HelpBox("URL count " + ConfiguredCapacity.ToString("N0") + " is within the recommended " +
+            ResourceWarningUrlCount.ToString("N0") + " URLs. Text alone is roughly " + UrlTextMegabytes(ConfiguredCapacity) +
+            " MB; serialized objects, temporary copies and Udon add more.", MessageType.Info);
+        }
+        return IsRangeValid(ConfiguredStart, ConfiguredCapacity);
       }
       finally { EditorGUIUtility.labelWidth = previousLabelWidth; }
-    }
-
-    private void DrawSettings()
-    {
-      EditorGUILayout.HelpBox("Bake complete ?srid= URLs for direct page/play/queue buttons. " +
-        "IDs outside this range cannot be generated at runtime. Update the range and upload the world again when needed. " +
-        "Coverage is an estimate based on observed growth, not a guarantee.", MessageType.Info);
-      _latest = EditorGUILayout.IntField("Latest observed record ID", _latest);
-      _dailyGrowth = EditorGUILayout.IntField("Estimated IDs per day", _dailyGrowth);
-      _days = EditorGUILayout.IntField("Days to cover (+20% reserve)", _days);
-      int plannedCount = PlanCapacity(_start, _latest, _dailyGrowth, _days);
-      using (new EditorGUI.DisabledScope(plannedCount == 0))
-        if (GUILayout.Button("Apply coverage estimate")) _capacity = plannedCount;
-      if (plannedCount == 0)
-        EditorGUILayout.HelpBox("Invalid estimate or more than 2,000,000 URLs required. Adjust the first ID or coverage inputs.", MessageType.Warning);
-      _start = EditorGUILayout.IntField("First record ID", _start);
-      _capacity = EditorGUILayout.IntField("URL count (max 2,000,000)", _capacity);
-      long last = (long)_start + _capacity - 1;
-      EditorGUILayout.LabelField("Last record ID", last.ToString());
-      if (_dailyGrowth > 0 && _latest >= _start && _latest <= last)
-        EditorGUILayout.LabelField("Estimated remaining days", ((last - _latest) / (double)_dailyGrowth).ToString("F1"));
-      else EditorGUILayout.HelpBox("Observed ID is outside the pool, or growth is invalid.", MessageType.Warning);
-      if (_capacity > ResourceWarningUrlCount)
-      {
-        EditorGUILayout.HelpBox("URL count " + _capacity.ToString("N0") + " is above the recommended " +
-          ResourceWarningUrlCount.ToString("N0") + " URLs. Resource usage may be too high: text alone is roughly " +
-          UrlTextMegabytes(_capacity) + " MB versus " + UrlTextMegabytes(ResourceWarningUrlCount) + " MB at the recommended limit, " +
-          "and serialized objects, temporary copies, Undo and client memory add more. Raise the coverage only when necessary, " +
-          "and verify world size, build time and memory before upload.", MessageType.Warning);
-      }
-      else
-      {
-        EditorGUILayout.HelpBox("URL count " + _capacity.ToString("N0") + " is within the recommended " +
-          ResourceWarningUrlCount.ToString("N0") + " URLs. Text alone is roughly " + UrlTextMegabytes(_capacity) +
-          " MB; serialized objects, temporary copies and Udon add more.", MessageType.Info);
-      }
-      using (new EditorGUI.DisabledScope(!IsRangeValid(_start, _capacity)))
-      {
-        if (GUILayout.Button("Bake module prefab")) RequestBake(_start, _capacity);
-      }
     }
 
     /// <summary>Rough UTF-16 text size of the baked pool, for display only.</summary>
@@ -171,58 +199,25 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       return true;
     }
 
-    private static void UpdateVersion(GameObject root)
+    /// <summary>
+    /// Fails when the freshly built pool did not reach the backing UdonBehaviour, so a prefab is
+    /// never saved with an empty or truncated URL array.
+    /// </summary>
+    public static void VerifySerializedPool(GameObject root)
     {
-      foreach (var definition in root.GetComponentsInChildren<YamaPlayerModuleDefinition>(true))
-        definition.version = BilibiliSearchPanelSetup.Version;
-      foreach (var label in root.GetComponentsInChildren<Text>(true))
+      if (root == null) throw new InvalidOperationException("BilibiliSearch: nothing to verify.");
+      var services = root.GetComponentsInChildren<BilibiliSearchService>(true);
+      if (services.Length == 0) throw new InvalidOperationException("BilibiliSearch: module prefab has no search service.");
+      foreach (var service in services)
       {
-        if (label.name == "VersionButtonText") label.text = "v" + BilibiliSearchPanelSetup.Version;
-        else if (label.name == "VersionName") label.text = "BiliBili Search v" + BilibiliSearchPanelSetup.Version;
-        else if (label.name == "VersionChangelogValue") label.text = BilibiliSearchPanelSetup.Changelog;
+        var backing = UdonSharpEditorUtility.GetBackingUdonBehaviour(service);
+        if (backing == null ||
+            !backing.publicVariables.TryGetVariableValue<int>(nameof(service.RecordUrlStart), out var savedStart) || savedStart != service.RecordUrlStart ||
+            !backing.publicVariables.TryGetVariableValue<int>(nameof(service.RecordUrlCapacity), out var savedCount) || savedCount != service.RecordUrlCapacity ||
+            !backing.publicVariables.TryGetVariableValue<VRCUrl[]>(nameof(service.RecordUrls), out var savedUrls) ||
+            savedUrls == null || savedUrls.Length != service.RecordUrlCapacity)
+          throw new InvalidOperationException("UdonSharp did not serialize the URL pool. Prefabs were not saved; run Generate Prefabs again and check the Console.");
       }
-    }
-
-    public static void BakePrefab(int start, int count)
-    {
-      if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("Exit Play mode before baking URLs.");
-      if (!IsRangeValid(start, count)) throw new InvalidOperationException("Invalid direct URL pool range.");
-      if (EditorApplication.isCompiling || EditorUtility.scriptCompilationFailed)
-        throw new InvalidOperationException("Wait for successful Unity compilation before baking URLs.");
-      UdonSharp.Compiler.UdonSharpCompilerV1.CompileSync();
-      if (UdonSharpProgramAsset.AnyUdonSharpScriptHasError())
-        throw new InvalidOperationException("UdonSharp compilation failed; prefab was not changed.");
-      var root = PrefabUtility.LoadPrefabContents(ModulePath);
-      try
-      {
-        var services = root.GetComponentsInChildren<BilibiliSearchService>(true);
-        if (services.Length == 0) throw new InvalidOperationException("Module prefab has no search service.");
-        foreach (var service in services)
-        {
-          service.RecordUrlStart = start;
-          service.RecordUrlCapacity = count;
-          Bake(service);
-          UdonSharpEditorUtility.CopyProxyToUdon(service);
-          var backing = UdonSharpEditorUtility.GetBackingUdonBehaviour(service);
-          if (backing == null ||
-              !backing.publicVariables.TryGetVariableValue<int>(nameof(service.RecordUrlStart), out var savedStart) || savedStart != start ||
-              !backing.publicVariables.TryGetVariableValue<int>(nameof(service.RecordUrlCapacity), out var savedCount) || savedCount != count ||
-              !backing.publicVariables.TryGetVariableValue<VRCUrl[]>(nameof(service.RecordUrls), out var savedUrls) || savedUrls == null || savedUrls.Length != count)
-            throw new InvalidOperationException("UdonSharp did not serialize the URL pool. Prefab was not saved. Use the Direct Action URLs window to refresh serialization and retry.");
-        }
-        UpdateVersion(root);
-        PrefabUtility.SaveAsPrefabAsset(root, ModulePath);
-      }
-      finally { PrefabUtility.UnloadPrefabContents(root); }
-      string panelPath = ModulePath.Replace("BilibiliSearch.prefab", "BilibiliSearchPanel.prefab");
-      if (AssetDatabase.LoadAssetAtPath<GameObject>(panelPath) != null)
-      {
-        var panel = PrefabUtility.LoadPrefabContents(panelPath);
-        try { UpdateVersion(panel); PrefabUtility.SaveAsPrefabAsset(panel, panelPath); }
-        finally { PrefabUtility.UnloadPrefabContents(panel); }
-      }
-      AssetDatabase.SaveAssets();
-      Debug.Log($"[BilibiliSearch] Direct URLs baked: {start} through {(long)start + count - 1} ({count} URLs). Scene prefab instances inherit this pool unless overridden.");
     }
   }
 

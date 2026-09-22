@@ -1,6 +1,6 @@
 # Bilibili 视频搜索模块（YamaPlayer 扩展）
 
-> **当前版本 v1.1.1（2026-09-21）**：编号池新增容量估算（按最新编号 / 每日增长 / 覆盖天数自动算数量，含 20% 余量），默认池缩减为 `600000`–`810002`，并修复更新脚本后 Bake 失败的问题。更新内容见 [CHANGELOG.md](CHANGELOG.md)，配置与限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
+> **当前版本 v1.1.2（2026-09-21）**：编号池配置并入 **Bilibili Search Setup**（Base URL 下方），填好后一次 **Generate Prefabs** 连面板、模块与 `?srid=` 地址池一起生成；默认池为 `500000`–`542002`（42003 条），推荐上限 `50000`。更新内容见 [CHANGELOG.md](CHANGELOG.md)，配置与限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 给 [YamaPlayer](https://github.com/koorimizuw/YamaPlayer) 的屏幕 UI 加一个 B 站面板：
 **关键词搜索**结果列表，或者直接**粘贴 B 站链接 / BV 号**播放，支持复制链接与待播队列。
@@ -48,9 +48,10 @@
 1. 把本仓库根目录的内容整体放进 YamaPlayer 包的 `Modules/BilibiliSearch/`
    （保留 `Editor/` 子目录与全部 `.meta`）（**不用改 YamaPlayer 核心**）；
 2. `Tools → YamaPlayer → Bilibili Search Setup` 里填 **Base URL**（你自己的后端，
-   例如 `https://bili.example.com/player/`），点 **Generate Prefabs**。
-   没填之前生成按钮是灰的 —— 仓库不发布任何服务器地址；
-3. 在 **Direct Action URLs** 工具中设置覆盖后端当前 `recordsid` 的编号范围并烘焙（默认 600000–810002）；
+   例如 `https://bili.example.com/player/`），并在同一窗口的 **Direct Action URLs** 一栏
+   设置编号范围（默认 `500000`–`542002`），点 **Generate Prefabs**；
+   没填 Base URL 之前生成按钮是灰的 —— 仓库不发布任何服务器地址；
+3. 生成结果包含模块 prefab、面板 prefab 和完整的 `?srid=` 地址池；
 4. 把生成出来的模块 prefab 加到场景里 YamaPlayer 的 `ModuleManager` 上；
 5. VRChat 客户端里打开 **Allow Untrusted URLs**（自建域名不在信任列表里）。
 

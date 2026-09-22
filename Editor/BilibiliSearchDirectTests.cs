@@ -37,8 +37,13 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
       Check(BilibiliSearchDirectSetup.PlanCapacity(1, 1, 0, 30) == 0, "zero growth rejected");
       Check(BilibiliSearchDirectSetup.IsRangeValid(int.MaxValue, 1), "inclusive maximum ID accepted");
       Check(!BilibiliSearchDirectSetup.IsRangeValid(int.MaxValue, 2), "range overflow rejected");
-      Check(BilibiliSearchDirectSetup.ResourceWarningUrlCount == 220000, "resource warning threshold");
-      Check(BilibiliSearchDirectSetup.ResourceWarningUrlCount > 210003, "default pool stays below the warning threshold");
+      Check(BilibiliSearchDirectSetup.DefaultStart == 500000 && BilibiliSearchDirectSetup.DefaultCapacity == 42003, "shipped pool defaults");
+      Check(BilibiliSearchDirectSetup.DefaultLatest == 500000 && BilibiliSearchDirectSetup.DefaultDailyGrowth == 5000 && BilibiliSearchDirectSetup.DefaultDays == 7, "shipped coverage inputs");
+      Check(BilibiliSearchDirectSetup.PlanCapacity(BilibiliSearchDirectSetup.DefaultStart, BilibiliSearchDirectSetup.DefaultLatest,
+        BilibiliSearchDirectSetup.DefaultDailyGrowth, BilibiliSearchDirectSetup.DefaultDays) == BilibiliSearchDirectSetup.DefaultCapacity,
+        "shipped defaults match the documented plan");
+      Check(BilibiliSearchDirectSetup.ResourceWarningUrlCount == 50000, "resource warning threshold");
+      Check(BilibiliSearchDirectSetup.ResourceWarningUrlCount > BilibiliSearchDirectSetup.DefaultCapacity, "default pool stays below the warning threshold");
       Check(BilibiliSearchDirectSetup.ResourceWarningUrlCount < BilibiliSearchService.MaxRecordUrlCapacity, "warning threshold below the hard limit");
       var root = new GameObject("BiliDirectRegression");
       try

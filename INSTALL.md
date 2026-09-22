@@ -1,6 +1,6 @@
 # 安装与配置（BiliBili Search for YamaPlayer）
 
-> **当前版本 v1.1.1（2026-09-21）**：编号池支持容量估算，默认池缩减为 `600000`–`810002`，并修复更新脚本后 Bake 失败的问题。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
+> **当前版本 v1.1.2（2026-09-21）**：编号池配置并入 **Bilibili Search Setup**（Base URL 下方），设置好后一次 **Generate Prefabs** 生成面板、模块与完整的 `?srid=` 地址池；默认池 `500000`–`542002`（42003 条），推荐上限 `50000`。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
 
 在 YamaPlayer 的屏幕上加一个 B 站视频搜索面板：搜关键词 → 从列表里挑一条 →
 **复制链接 / 播放 / 加入待播队列**，支持翻页。
@@ -72,29 +72,38 @@
 
 | 菜单项 | 作用 |
 | --- | --- |
-| `Bilibili Search Setup`（顶层） | 填 Base URL 并 **Generate Prefabs** 的配置窗口 |
-| `Bilibili Search / Generate Prefabs` | 同上窗口的生成动作（已配置过地址时可直接用） |
-| `Bilibili Search / Direct Action URLs` | 烘编号池、更新版本与履历，见第 3.0 步 |
+| `Bilibili Search Setup`（顶层） | 填 Base URL、配置编号池，并 **Generate Prefabs** 的配置窗口 |
+| `Bilibili Search / Generate Prefabs` | 同上窗口的生成动作（已配置过地址与编号池时可直接用） |
 | `Bilibili Search / Uninstall from Scene` | 从场景移除所有模块实例 |
 | `Bilibili Search / Run Direct Action Regression Tests` | 回归断言 |
 | `Repair Bilibili Search Scene` / `Validate Bilibili Search`（顶层） | 场景修复与自检 |
 
-窗口里只有一项设置：
+窗口里有两段设置：
 
 ```
 Backend
   Base URL: https://bili.example.com/player/
+
+Direct Action URLs
+  Latest observed record ID: 500000
+  Estimated IDs per day: 5000
+  Days to cover (+20% reserve): 7
+  [Apply coverage estimate]
+  First record ID: 500000
+  URL count (max 2,000,000): 42003
+  Last record ID / Estimated remaining days（只读，自动计算）
 ```
 
 - 填**你自己部署的**服务地址，**以 `/player/` 结尾**（末尾斜杠会自动补）。
   填 `https://` 开头的完整地址；填了 query（`?…`）会被自动去掉。
 - **没填之前 `Generate Prefabs` 按钮是灰的** —— 这是故意的：仓库不发布任何服务器地址。
+  编号范围无效（起点非正、数量越界）时同样置灰，并显示原因。
 - 地址存在 `EditorPrefs`（键 `Yamadev.YamaStream.BilibiliSearch.BackendBaseUrl`），
-  换机器、换工程要重新填一次。
+  编号池的起点、数量与估算三项存在同一命名空间下，**换机器、换工程要重新填一次**。
 
-点 **Generate Prefabs**，工具会用这个地址生成默认编号池并预填以下字段：
+点 **Generate Prefabs**，工具会用这个地址和窗口里的编号范围，一次生成面板 prefab、模块 prefab 和完整编号池，并预填以下字段：
 
-首次安装时，工具会自动补齐缺失的 UdonSharp 程序资产，等待脚本版本升级和编译完成后继续生成，无需重复点击。等待期间 Console 会显示 `Preparing UdonSharp programs`。如果 Unity / Udon 编译失败，先处理 Console 中的编译错误，再重试生成。
+首次安装时，工具会自动补齐缺失的 UdonSharp 程序资产，等待脚本版本升级和编译完成后继续生成，无需重复点击。等待期间 Console 会显示 `Preparing UdonSharp programs`。如果 Unity / Udon 编译失败，先处理 Console 中的编译错误，再重试生成。保存前会校验编号池确实写入了 Udon；写入失败会中止保存并抛错。
 
 | 位置 | 生成的内容 |
 | --- | --- |
@@ -104,25 +113,26 @@ Backend
 
 ### 3.0 编号池（直接操作）什么时候要重做
 
-生成 Prefabs 时会用当前 Base URL 烘出默认编号池，一般无需单独操作。以下情况需要重做：
+生成 Prefabs 时会用 Setup 窗口里的起点与数量烘出完整 `?srid=` 地址池，一般无需单独操作。以下情况需要重做：
 换域名、后端编号接近池的末编号、需要缩减旧大池的资源占用，或升级已有模块想更新版本与履历。
 
-做法：**Tools → YamaPlayer → Bilibili Search → Direct Action URLs** → 设置编号范围 →
-**Bake module prefab**。原理、默认范围、资源开销与范围限制见
+做法：**Tools → YamaPlayer → Bilibili Search Setup** → 在 **Direct Action URLs** 一栏填当次观测到的编号 →
+（可选）**Apply coverage estimate** → **Generate Prefabs**。独立的 Direct Action URLs 窗口在 v1.1.2 已移除，
+烘池与版本文字更新都在生成流程里完成。原理、默认范围、资源开销与范围限制见
 **[DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)**，版本变化见 [CHANGELOG.md](CHANGELOG.md)。
 
-按每周更新地图的计划，每次发布前重新观测后端编号并调整池的起点、估算及烘焙，然后重新构建上传。不要等编号耗尽后再更新；覆盖天数取决于实际增长速度。仅更新模块脚本不会缩减已有 prefab 的数组，旧大池的迁移步骤见上述编号池说明。
+按每周更新地图的计划，每次发布前重新观测后端编号并调整池的起点、估算，再重新生成、构建上传。不要等编号耗尽后再更新；覆盖天数取决于实际增长速度。仅更新模块脚本不会缩减已有 prefab 的数组，旧大池的迁移步骤见上述编号池说明。
 
 ### 3.1 面板的标签页：网址输入（默认）与关键词搜索
 
-面板顶栏里有两个标签按钮（在 `v1.1.1` 左边），点它们切换；面板没有标题栏，那一行就是全部顶栏：
+面板顶栏里有两个标签按钮（在 `v1.1.2` 左边），点它们切换；面板没有标题栏，那一行就是全部顶栏：
 
 | 标签页 | 内容 |
 | --- | --- |
 | **网址输入**（默认，打开面板就是它） | 输入栏（预填 `{Base URL}?url=`）+ **播放** + **关闭** + 下方两段说明 |
 | **关键词搜索** | 搜索框（预填 `{Base URL}?page=1&keyword=`）+ 结果列表 + 上一页/下一页/关闭 |
 
-顶栏从左到右是 `[网址输入] [关键词搜索] [v1.1.1] 状态文字 … 页码`。
+顶栏从左到右是 `[网址输入] [关键词搜索] [v1.1.2] 状态文字 … 页码`。
 
 网址输入页的行为：
 
@@ -228,7 +238,7 @@ YamaPlayer 本地化会抛异常、面板文字失效。装法：
 
 ## 6. 用法
 
-1. 进世界后，点主页面左侧图标列最上面的 **B 站图标** 展开面板。顶栏是 [网址输入] [关键词搜索] [v1.1.1] 状态 … 页码 一行，点前两个按钮切标签页，**默认停在「网址输入」**。
+1. 进世界后，点主页面左侧图标列最上面的 **B 站图标** 展开面板。顶栏是 [网址输入] [关键词搜索] [v1.1.2] 状态 … 页码 一行，点前两个按钮切标签页，**默认停在「网址输入」**。
 
 **网址输入页（默认）**
 
@@ -251,7 +261,7 @@ YamaPlayer 本地化会抛异常、面板文字失效。装法：
 
 **其他**
 
-6. 面板顶栏里的 **`v1.1.1`** 按钮打开版本浮层，左上角 `← 返回` 回到搜索面板。
+6. 面板顶栏里的 **`v1.1.2`** 按钮打开版本浮层，左上角 `← 返回` 回到搜索面板。
 
 > 搜索结果的播放与入队从第一次点击起就直接执行；后端 `recordsid` 必须有效且位于预置范围内。复制链接按钮仍保留复制窗口。
 
@@ -302,7 +312,7 @@ Modules/BilibiliSearch/                  ← 仓库根目录的内容原样放�
 ├─ BilibiliIcon.png / PanelFrame.png  ★ 生成物：图标与圆角图
 └─ Editor/
    ├─ BilibiliSearchPanelSetup.cs     生成 prefab 的工具（第 3 步那个窗口）
-   ├─ BilibiliSearchDirectSetup.cs   编号池烘焙、版本更新、构建检查
+   ├─ BilibiliSearchDirectSetup.cs   编号池设置、烘焙与构建检查
    ├─ BilibiliSearchDirectTests.cs   直接操作回归检查
    ├─ BilibiliSearchRepair.cs         场景里模块的修复 / 自检工具
    ├─ Localization.Editor.json        模块名 / 描述
