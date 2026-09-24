@@ -30,6 +30,51 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     public static int RunChecks()
     {
       _assertions = 0;
+      string prettyJson = BilibiliSearchSridTester.FormatResponse("[{\"recordsid\":100,\"title\":\"a,b: {test}\"}]");
+      Check(prettyJson.Contains("\n") && prettyJson.Contains("a,b: {test}"), "response JSON is multiline without changing string content");
+      Check(BilibiliSearchSridTester.FormatResponse("<html>error</html>") == "<html>error</html>", "non-JSON response stays readable");
+      Check(BilibiliSearchSridTester.FormatResponse("") == "", "empty response formatting");
+      int previousId, nextId, observedId;
+      BilibiliSearchSridTester.Analyze("[{\"recordsid\":\"100\"},{\"recordsid\":101}]", 100, 4,
+        out previousId, out nextId, out observedId);
+      Check(previousId == 102 && nextId == 103 && observedId == 101, "SRID tester raw pagination");
+      string coverageReport = BilibiliSearchSridTester.Analyze("[{\"recordsid\":99},{\"recordsid\":100},{\"recordsid\":104}]",
+        100, 4, out previousId, out nextId, out observedId, 10, 2);
+      Check(coverageReport.Contains("Returned SRID range: 99 - 104") && coverageReport.Contains("Inside pool: 1; outside pool: 2"),
+        "keyword search reports actual bounds and partial pool coverage");
+      Check(coverageReport.Contains("OUTSIDE") && nextId == 0, "noncontiguous response still reports coverage without pagination");
+      coverageReport = BilibiliSearchSridTester.Analyze("[{\"recordsid\":100},null]", 100, 4,
+        out previousId, out nextId, out observedId);
+      Check(coverageReport.Contains("INCOMPLETE"), "invalid rows cannot produce a coverage pass");
+      coverageReport = BilibiliSearchSridTester.Analyze("[{\"recordsid\":100}]", 100, 1,
+        out previousId, out nextId, out observedId);
+      Check(coverageReport.Contains("PASS") && coverageReport.Contains("Next page: 102 / Outside pool"),
+        "result coverage and pagination coverage reported separately");
+      string forecast = BilibiliSearchSridTester.Forecast(100, 100, 149, 151, 10, 2);
+      Check(forecast.Contains("Upper-bound headroom: 48") && forecast.Contains("Estimated remaining days: 4.8"),
+        "response forecast reserves pagination IDs");
+      Check(forecast.Contains("Suggested URL count: 76"), "response forecast uses observed ID and reserve");
+      Check(BilibiliSearchSridTester.Forecast(100, 4, 110, 112, 10, 2).Contains("Estimated remaining days: 0.0"),
+        "exhausted pool has zero remaining coverage");
+      Check(BilibiliSearchSridTester.Forecast(100, 4, 99, 0, 10, 2).Contains("below the pool"), "below-pool forecast is qualified");
+      Check(BilibiliSearchSridTester.Forecast(100, 4, 101, 103, 0, 2).Contains("Prediction unavailable"), "invalid growth blocks prediction");
+      foreach (string wrapper in new[] { "data", "result", "list" })
+      {
+        BilibiliSearchSridTester.Analyze("{\"" + wrapper + "\":[{\"recordsid\":100}]}", 100, 3,
+          out previousId, out nextId, out observedId);
+        Check(previousId == 101 && nextId == 102 && observedId == 100, "SRID tester wrapper " + wrapper);
+      }
+      foreach (string body in new[] { "[]", "{}", "not json", "[null]", "[{\"recordsid\":100},{\"recordsid\":102}]",
+        "[{\"recordsid\":2147483647}]", "[{\"recordsid\":1.5}]", "[{\"recordsid\":\"+100\"}]",
+        "[{\"recordsid\":\"999999999999\"}]" })
+      {
+        BilibiliSearchSridTester.Analyze(body, 100, 3, out previousId, out nextId, out observedId);
+        Check(previousId == 0 && nextId == 0, "SRID tester rejects unsafe pagination: " + body);
+      }
+      Check(BilibiliSearchSridTester.Coverage(int.MaxValue, int.MaxValue, 1) == "Inside pool", "SRID tester inclusive upper bound");
+      Check(BilibiliSearchSridTester.Coverage(103, 100, 3).StartsWith("Outside pool"), "SRID tester outside pool");
+      Check(BilibiliSearchSridTester.IsBackendValid("https://example.com/player/"), "SRID tester HTTPS endpoint");
+      Check(!BilibiliSearchSridTester.IsBackendValid("https://example.com/player/#fragment"), "SRID tester rejects fragment");
       Check(BilibiliSearchDirectSetup.PlanCapacity(550000, 580000, 30000, 30) == 1110003, "30 days plus reserve and pagination");
       Check(BilibiliSearchDirectSetup.PlanCapacity(550000, 580000, 30000, 90) == 0, "oversized plan rejected without truncation");
       Check(BilibiliSearchDirectSetup.PlanCapacity(550000, 549999, 30000, 30) == 0, "observed ID below start rejected");

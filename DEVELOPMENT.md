@@ -1,6 +1,6 @@
 # Bilibili 视频搜索模块 —— 开发与排错笔记
 
-> **v1.1.2（2026-09-22）**：编号池配置并入 Bilibili Search Setup（Base URL 下方），一次 Generate Prefabs 生成面板、模块与地址池；独立 Direct Action URLs 窗口已移除，默认池 `500000`–`542002`。池的配置与限制详见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
+> **当前版本 v1.2.0（2026-09-24）**：新增 Unity Editor 关键词搜索 / SRID 范围与编号池覆盖预测工具，Setup 的 **Place In Current Scene** 默认不勾选。更新内容见 [CHANGELOG.md](CHANGELOG.md)，工具用法与编号池说明见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 > 面向二次开发：文件清单、架构取舍、布局公式、真实踩过的坑、对 YamaPlayer 核心做的改动。
 > 安装、配置与使用请看 [README.md](README.md) 和 [INSTALL.md](INSTALL.md)；
@@ -38,6 +38,7 @@ Modules/BilibiliSearch/
    ├─ BilibiliSearchPanelSetup.cs     一键生成 prefab 的工具（`Version` / `Changelog` 常量与编号池设置都在这里）
    ├─ BilibiliSearchDirectSetup.cs   编号池设置、烘焙与构建检查（-3200）
    ├─ BilibiliSearchDirectTests.cs   编辑器回归断言
+   ├─ BilibiliSearchSridTester.cs    关键词搜索、SRID 范围／池覆盖与预测测试窗口
    ├─ BilibiliSearchRepair.cs         场景里模块的修复 / 绑定工具
    ├─ Localization.Editor.json        模块名 / 描述（编辑器显示）
    └─ Yamadev.YamaStream.Modules.BilibiliSearch.Editor.asmdef
@@ -159,9 +160,9 @@ UIController.Localization.cs(132,49)
   - **添加到待播队列**：加入 YamaPlayer 的播放队列（`Controller.Queue.AddTrack`）。
     加入成功后该条的队列按钮**禁用 10 秒**，防止重复添加。
 - **首次入队也无需粘贴**：与播放共用预置记录地址；保留权限检查、所有权处理和防重复冷却。
-- **版本按钮**：标题右边紧挨着一个小按钮（显示 `v1.1.2`），点开一个版本浮层。浮层仿照
+- **版本按钮**：标题右边紧挨着一个小按钮（显示 `v1.2.0`），点开一个版本浮层。浮层仿照
   YamaPlayer 自己的版本信息页排版：
-  - 顶部**居中**的项目名 + 版本号 `BiliBili Search v1.1.2`（Primary 配色），
+  - 顶部**居中**的项目名 + 版本号 `BiliBili Search v1.2.0`（Primary 配色），
     **竖直分割线的顶端正好接在它下面**；
   - 分割线**左半边**：作者头像在上（320×240，占分割线上半段），下面五行
     （`VRChat / Twitter / Github / DeepSeek / Codex`），第一行与头像之间**空一行**
@@ -186,7 +187,7 @@ UIController.Localization.cs(132,49)
     `Packages/net.kwxxw.yama-stream/Assets/Images/` 取（找不到就按文件名全工程搜一遍）。
   - 头像是模块目录里的 **`Author.png`**（320×240、圆形、四角透明）。工具只会强制它的导入
     设置为 `Sprite` + 保留透明通道，换图直接替换这个文件即可。
-- **面板自己有两个标签页**（就在顶栏里、`v1.1.2` 左边那两个按钮，顺序是
+- **面板自己有两个标签页**（就在顶栏里、`v1.2.0` 左边那两个按钮，顺序是
   `[网址输入] [关键词搜索]`，`BilibiliSearchUI.ShowUrlTab()` / `ShowSearchTab()` 切换
   `UrlTab` / `SearchTab` 两个容器，**默认停在网址输入**：`ShowPanel(true)` 里会调 `ShowUrlTab()`）：
   - **关键词搜索**：搜索框（`_defaultSearchUrl`）+ 结果列表；切到它时会
@@ -269,7 +270,7 @@ BV 用于复制网页链接与结果身份校验，播放和入队使用记录 U
 文字块 `InfoHeight` 140、按钮离底部 36 ↔ 分割线 3 等），改完重新 Generate 一次即可。
 
 > 面板顶栏**没有标题**了（为了省纵向空间删掉了 `TitleText`）：现在是
-> `[网址输入] [关键词搜索] [v1.1.2] 状态文字 … 页码` 一行（默认停在网址输入页）。
+> `[网址输入] [关键词搜索] [v1.2.0] 状态文字 … 页码` 一行（默认停在网址输入页）。
 > `module.bilibilisearch.title` 这个 key 仍留在 `Localization.Runtime.json` / `BiliText.cs` 里，
 > 但面板已经没有任何地方用它（`UpdateTranslation()` 只写标签、状态、按钮和浮层文案）。
 
@@ -320,6 +321,12 @@ Cell (240)
 按 UI sprite 导入。
 
 ## 七、排错（含旧版本历史问题）
+
+**SRID 测试窗口**：`Editor/BilibiliSearchSridTester.cs` 仅属于 Editor 程序集，通过 UnityWebRequest 请求关键词搜索，不需要 ClientSim。配置从 Setup 初始化为窗口局部值；`Analyze` 检查完整原始数组，输出范围、覆盖与分页编号，`Forecast` 复用 Setup 的 `PlanCapacity`。界面与请求状态不写入运行时组件。
+
+**测试窗口搜索后按钮文字消失、响应只有一条长行**：长文本曾使 IMGUI 的布局宽度超过窗口，按钮居中文字落在可视区外。窗口现在固定内容宽度，结果与 JSON 用显式矩形、自动换行和独立滚动区显示；`FormatResponse` 使用 VRCJson 的 Beautify 输出，先格式化再截断显示，分析仍使用完整原文。窗口上方的 SRID Range 从解析结果读取，不依赖报告文本拆分。
+
+**更新脚本后面板仍显示旧版本**：`Version` / `Changelog` 在生成时写入模块定义和面板文字，需要重新 **Generate Prefabs**；Setup 默认不自动放入当前场景。发布验收范围与待运行检查见 [CHANGELOG.md](CHANGELOG.md)。
 
 **Generate Prefabs 内存占用高或提示 `Failed to create Object Undo`**：大编号池在生成、序列化和注册场景对象 Undo 时可能产生多份数据；该提示表示对象过大导致 Unity 清空 Undo 缓冲，并不等于生成已经成功。现已缩减新模块默认池；已有大池应在 Bilibili Search Setup 里按 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md) 的说明缩容后重新 Generate Prefabs。未重新测量当前默认值的 Editor 内存峰值，也不保证所有工程都不会触发 Undo 限制；生成结果仍需检查 Console 和 prefab。
 

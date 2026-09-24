@@ -1,6 +1,6 @@
 # 安装与配置（BiliBili Search for YamaPlayer）
 
-> **当前版本 v1.1.2（2026-09-22）**：编号池配置并入 **Bilibili Search Setup**（Base URL 下方），设置好后一次 **Generate Prefabs** 生成面板、模块与完整的 `?srid=` 地址池；默认池 `500000`–`542002`（42003 条），推荐上限 `50000`。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
+> **当前版本 v1.2.0（2026-09-24）**：新增 Unity Editor 关键词搜索 / SRID 范围与编号池覆盖预测工具，Setup 的 **Place In Current Scene** 默认不勾选。更新内容见 [CHANGELOG.md](CHANGELOG.md)，工具用法与编号池说明见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 在 YamaPlayer 的屏幕上加一个 B 站视频搜索面板：搜关键词 → 从列表里挑一条 →
 **复制链接 / 播放 / 加入待播队列**，支持翻页。
@@ -76,6 +76,7 @@
 | `Bilibili Search / Generate Prefabs` | 同上窗口的生成动作（已配置过地址与编号池时可直接用） |
 | `Bilibili Search / Uninstall from Scene` | 从场景移除所有模块实例 |
 | `Bilibili Search / Run Direct Action Regression Tests` | 回归断言 |
+| `Bilibili Search / SRID Test Tool` | 输入关键词检查 SRID 范围、编号池覆盖与容量预测 |
 | `Repair Bilibili Search Scene` / `Validate Bilibili Search`（顶层） | 场景修复与自检 |
 
 窗口里有两段设置：
@@ -101,6 +102,10 @@ Direct Action URLs
 - 地址存在 `EditorPrefs`（键 `Yamadev.YamaStream.BilibiliSearch.BackendBaseUrl`），
   编号池的起点、数量与估算三项存在同一命名空间下，**换机器、换工程要重新填一次**。
 
+可先打开 **SRID Test Tool**，输入关键词检查当前后端编号是否在池内，再根据预测调整 Setup。操作与预测限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
+
+**Place In Current Scene 默认不勾选**：生成 prefab 后按第 4 节添加模块；需要生成后自动放入当前场景时，手动勾选。
+
 点 **Generate Prefabs**，工具会用这个地址和窗口里的编号范围，一次生成面板 prefab、模块 prefab 和完整编号池，并预填以下字段：
 
 首次安装时，工具会自动补齐缺失的 UdonSharp 程序资产，等待脚本版本升级和编译完成后继续生成，无需重复点击。等待期间 Console 会显示 `Preparing UdonSharp programs`。如果 Unity / Udon 编译失败，先处理 Console 中的编译错误，再重试生成。保存前会校验编号池确实写入了 Udon；写入失败会中止保存并抛错。
@@ -125,14 +130,14 @@ Direct Action URLs
 
 ### 3.1 面板的标签页：网址输入（默认）与关键词搜索
 
-面板顶栏里有两个标签按钮（在 `v1.1.2` 左边），点它们切换；面板没有标题栏，那一行就是全部顶栏：
+面板顶栏里有两个标签按钮（在 `v1.2.0` 左边），点它们切换；面板没有标题栏，那一行就是全部顶栏：
 
 | 标签页 | 内容 |
 | --- | --- |
 | **网址输入**（默认，打开面板就是它） | 输入栏（预填 `{Base URL}?url=`）+ **播放** + **关闭** + 下方两段说明 |
 | **关键词搜索** | 搜索框（预填 `{Base URL}?page=1&keyword=`）+ 结果列表 + 上一页/下一页/关闭 |
 
-顶栏从左到右是 `[网址输入] [关键词搜索] [v1.1.2] 状态文字 … 页码`。
+顶栏从左到右是 `[网址输入] [关键词搜索] [v1.2.0] 状态文字 … 页码`。
 
 网址输入页的行为：
 
@@ -238,7 +243,7 @@ YamaPlayer 本地化会抛异常、面板文字失效。装法：
 
 ## 6. 用法
 
-1. 进世界后，点主页面左侧图标列最上面的 **B 站图标** 展开面板。顶栏是 [网址输入] [关键词搜索] [v1.1.2] 状态 … 页码 一行，点前两个按钮切标签页，**默认停在「网址输入」**。
+1. 进世界后，点主页面左侧图标列最上面的 **B 站图标** 展开面板。顶栏是 [网址输入] [关键词搜索] [v1.2.0] 状态 … 页码 一行，点前两个按钮切标签页，**默认停在「网址输入」**。
 
 **网址输入页（默认）**
 
@@ -261,7 +266,7 @@ YamaPlayer 本地化会抛异常、面板文字失效。装法：
 
 **其他**
 
-6. 面板顶栏里的 **`v1.1.2`** 按钮打开版本浮层，左上角 `← 返回` 回到搜索面板。
+6. 面板顶栏里的 **`v1.2.0`** 按钮打开版本浮层，左上角 `← 返回` 回到搜索面板。
 
 > 搜索结果的播放与入队从第一次点击起就直接执行；后端 `recordsid` 必须有效且位于预置范围内。复制链接按钮仍保留复制窗口。
 
@@ -314,6 +319,7 @@ Modules/BilibiliSearch/                  ← 仓库根目录的内容原样放�
    ├─ BilibiliSearchPanelSetup.cs     生成 prefab 的工具（第 3 步那个窗口）
    ├─ BilibiliSearchDirectSetup.cs   编号池设置、烘焙与构建检查
    ├─ BilibiliSearchDirectTests.cs   直接操作回归检查
+   ├─ BilibiliSearchSridTester.cs    关键词搜索与 SRID 池覆盖测试窗口
    ├─ BilibiliSearchRepair.cs         场景里模块的修复 / 自检工具
    ├─ Localization.Editor.json        模块名 / 描述
    └─ *.asmdef                        程序集定义

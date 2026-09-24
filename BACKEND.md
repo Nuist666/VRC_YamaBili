@@ -12,6 +12,8 @@
 
 ## 初次搜索
 
+可在 Unity Editor 使用 **Tools → YamaPlayer → Bilibili Search → SRID Test Tool** 输入关键词与页码检查响应。工具显示 HTTP 状态、格式化 JSON、返回 SRID 范围与配置池覆盖；操作和预测限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。测试请求使用 UnityWebRequest，不能替代下文的媒体链路验证。
+
 ```text
 GET {Base URL}?page=1&keyword=关键词
 ```

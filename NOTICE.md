@@ -1,6 +1,6 @@
 # 第三方组件与署名
 
-版本说明：v1.1.2 为编辑器工具更新（编号池配置并入 Setup 窗口、默认池缩容、独立 Direct Action URLs 窗口移除）；本次更新不变更下述许可与署名条款。
+版本说明：v1.2.0 新增 Editor SRID 测试工具并调整 Setup 的场景放置默认值；本次更新不变更下述许可与署名条款。
 
 本模块是 [YamaPlayer](https://github.com/koorimizuw/YamaPlayer) 的扩展，依赖并复用了它的部分内容。
 下面列出这些东西的来源与适用条款。

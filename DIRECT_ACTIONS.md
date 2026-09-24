@@ -1,5 +1,21 @@
 # 直接操作与记录 URL 池
 
+## Unity Editor SRID 测试工具
+
+菜单 **Tools → YamaPlayer → Bilibili Search → SRID Test Tool**，无需进入 Play Mode。
+
+**Search results and prediction** 上方常驻 **SRID Range** 显示框：有有效结果时显示 `最小 SRID - 最大 SRID`，无结果、清空或开始新请求时显示 `-`，不需要滚动结果文本查找范围。
+
+1. 测试窗口界面统一为英文。首次打开时，Base URL、First record ID、URL count、Latest observed record ID、Estimated IDs per day、Days to cover 默认读取 **Bilibili Search Setup** 设置。这些字段均支持手动输入，估算和请求使用窗口内的值；修改不会自动写回 Setup。点击 **Reload from Setup** 可重新载入 Setup 当前设置。请求期间输入暂时禁用，修改配置、关键词或页码后旧测试结果会清空。
+2. 输入 **Search keyword** 和 **Search page (1-9999)**，点击 **Search and check SRID coverage**。工具显示完整响应中有效 `recordsid` 的最小值和最大值、池内／池外数量、无效记录数量及覆盖判断。仅所有记录有效且均在池内时显示 PASS；分页地址的覆盖情况单独显示。原始编号连续时计算上一页 `L+1`、下一页 `L+2`。支持裸数组及 `data` / `result` / `list` 包装；空数组、非法编号、不连续编号和整数溢出不会启用翻页。
+3. 结果中的 **Response-based prediction** 以本次响应的最大编号和手填每日增长值，计算编号池上界的剩余空间、预计剩余天数、覆盖指定天数所需的建议范围和 URL 数量（含 20% 余量及分页）。单次搜索无法测出每日增长，也不能保证响应最大编号就是全局最新编号；出现池外或无效记录时，剩余天数不代表当前结果可用。窗口上方的 Setup-based 估算仍以输入的 Latest observed record ID 为依据。
+4. 可继续测试推算出的上一页 / 下一页。窗口显示 HTTP 状态、响应类型和原始响应；结果与预测、Raw response 各有独立的纵向滚动区域，长文本自动换行。有效 JSON 按缩进多行格式显示，非 JSON 保留原文；显示最多 32,000 字符，分析始终使用完整原始响应。请求超时为 20 秒、间隔至少 5.1 秒，可取消，关闭窗口会清理请求。重定向只显示目标，不跟随下载媒体。
+5. 有有效记录且测试后端与 Setup 一致时，可点击 **Write highest response ID to Setup (same backend only)**，再回 Setup 使用 **Apply coverage estimate** 和 **Generate Prefabs** 更新编号池。该操作不自动改动池起点、数量或 prefab；测试窗口可用 **Reload from Setup** 读取更新值。
+
+Setup 的最新观测值和每日增长只能估算容量，不能推算某个视频对应的 SRID，也不能证明估算编号已经存在。搜索请求可能分配新记录。测试工具检查的是 UnityWebRequest 响应及 Setup 配置范围，不验证已生成 prefab 的实际池，也不能替代 VRChat / AVPro / yt-dlp 媒体链路测试。
+
+离线边界断言已加入现有 **Run Direct Action Regression Tests** 菜单，覆盖响应包装、连续性、非法编号、空响应、溢出和池边界。
+
 > **本文件是「直接翻页 / 播放 / 入队」行为的唯一出处**：原理、安装与升级、编号池配置、范围限制、后端约定。
 > 版本号与更新内容见 [CHANGELOG.md](CHANGELOG.md)；安装全流程见 [INSTALL.md](INSTALL.md)；后端字段契约见 [BACKEND.md](BACKEND.md)。
 > 其他文档不要再重复这里的原理与限制，只写各自主题。

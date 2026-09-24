@@ -28,8 +28,8 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     /// only list a module the project has a prefab for: dropping Modules/BilibiliSearch into
     /// another project is then enough to make the module available there.
     /// </summary>
-    public const string Version = "1.1.2";
-    public const string Changelog = "v1.1.2\nDirect Action URLs の設定を Bilibili Search Setup に統合し、Generate Prefabs で URL プールまでまとめて生成できるようにしました。\n\nv1.1.1\nDirect Action URLs に、URL数の試算機能とリソース使用量の警告を追加しました。\n\nv1.1.0\n検索結果のページ切り替え・再生・キュー追加をワンクリックで実行できるようにしました。\n\nv1.0.0\n初回リリース";
+    public const string Version = "1.2.0";
+    public const string Changelog = "v1.2.0\nキーワード検索で SRID の範囲・URL プールの対応状況・残り日数を確認できるテストツールを追加し、Setup のシーン配置を既定でオフにしました。\n\nv1.1.2\nDirect Action URLs の設定を Bilibili Search Setup に統合し、Generate Prefabs で URL プールまでまとめて生成できるようにしました。\n\nv1.1.1\nDirect Action URLs に、URL数の試算機能とリソース使用量の警告を追加しました。\n\nv1.1.0\n検索結果のページ切り替え・再生・キュー追加をワンクリックで実行できるようにしました。\n\nv1.0.0\n初回リリース";
 
     private const string DefaultOutputFolder = "Packages/net.kwxxw.yama-stream/Modules/BilibiliSearch";
     /// <summary>Where the prefabs used to be generated before they moved into the package.</summary>
@@ -101,7 +101,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     private string _outputFolder = DefaultOutputFolder;
     private string _targetPath = DefaultTargetPath;
     private int _siblingIndex = -1;
-    private bool _instantiateInScene = true;
+    private bool _instantiateInScene = false;
     /// <summary>Scroll offset of the setup window, which now also holds the record pool settings.</summary>
     private Vector2 _scroll;
     private static Font _cachedFont;
@@ -134,7 +134,7 @@ namespace Yamadev.YamaStream.Modules.BilibiliSearch.Editor
     }
 
     /// <summary>Base url of the backend, e.g. https://bili.example.com/player/ - empty when unset.</summary>
-    private static string BackendUrl => NormalizeBackend(BackendBase);
+    internal static string BackendUrl => NormalizeBackend(BackendBase);
 
     /// <summary>Search request url the search box is pre-filled with.</summary>
     private static string SearchUrl => BackendUrl + "?page=1&keyword=";

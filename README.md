@@ -1,6 +1,6 @@
 # Bilibili 视频搜索模块（YamaPlayer 扩展）
 
-> **当前版本 v1.1.2（2026-09-22）**：编号池配置并入 **Bilibili Search Setup**（Base URL 下方），填好后一次 **Generate Prefabs** 连面板、模块与 `?srid=` 地址池一起生成；默认池为 `500000`–`542002`（42003 条），推荐上限 `50000`。更新内容见 [CHANGELOG.md](CHANGELOG.md)，配置与限制见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
+> **当前版本 v1.2.0（2026-09-24）**：新增 Unity Editor 关键词搜索 / SRID 范围与编号池覆盖预测工具，Setup 的 **Place In Current Scene** 默认不勾选。更新内容见 [CHANGELOG.md](CHANGELOG.md)，工具用法与编号池说明见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 给 [YamaPlayer](https://github.com/koorimizuw/YamaPlayer) 的屏幕 UI 加一个 B 站面板：
 **关键词搜索**结果列表，或者直接**粘贴 B 站链接 / BV 号**播放，支持复制链接与待播队列。
@@ -31,6 +31,7 @@
 - 上一页 / 下一页：点击直接刷新结果，无需复制粘贴
 - 版本浮层：作者头像、社交账号、AI 署名、更新履历（右半边可滚动）
 - 9 种语言；配色跟随 YamaPlayer 的外观设置（`ColorDefinition`）
+- Unity Editor **SRID Test Tool**：输入关键词检查返回编号范围、池覆盖和容量预测，详见 [DIRECT_ACTIONS.md](DIRECT_ACTIONS.md)。
 
 ## 环境要求
 
@@ -51,7 +52,7 @@
    例如 `https://bili.example.com/player/`），并在同一窗口的 **Direct Action URLs** 一栏
    设置编号范围（默认 `500000`–`542002`），点 **Generate Prefabs**；
    没填 Base URL 之前生成按钮是灰的 —— 仓库不发布任何服务器地址；
-3. 生成结果包含模块 prefab、面板 prefab 和完整的 `?srid=` 地址池；
+3. 生成结果包含模块 prefab、面板 prefab 和完整的 `?srid=` 地址池；**Place In Current Scene** 默认不勾选，需要自动放入场景时手动启用；
 4. 把生成出来的模块 prefab 加到场景里 YamaPlayer 的 `ModuleManager` 上；
 5. VRChat 客户端里打开 **Allow Untrusted URLs**（自建域名不在信任列表里）。
 
